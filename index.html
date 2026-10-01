@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14161a">
+  <title>climbross</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">climbross</div>
+    <div class="status">
+      <span id="battery" class="chip" hidden></span>
+      <span id="mode" class="chip" hidden></span>
+      <button id="connectBtn" class="chip chip-btn">Connect</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- Measure -->
+    <section id="view-measure" class="view active">
+      <div class="seg" id="handSeg" role="radiogroup" aria-label="Hand">
+        <button data-hand="left" role="radio">Left</button>
+        <button data-hand="right" role="radio">Right</button>
+        <button data-hand="both" role="radio">Both</button>
+      </div>
+
+      <div class="gauge">
+        <div class="live"><span id="liveKg">0.0</span><small>kg</small></div>
+        <div class="gauge-sub">
+          <span>Peak <b id="peakKg">–</b></span>
+          <span id="pctMaxWrap">of max <b id="pctMax">–</b></span>
+          <span id="timer">0.0 s</span>
+        </div>
+      </div>
+
+      <canvas id="chart" height="160" aria-label="Force over time"></canvas>
+
+      <div class="row">
+        <button id="tareBtn" class="btn">Zero</button>
+        <button id="startBtn" class="btn btn-primary btn-big" disabled>Start</button>
+      </div>
+      <label class="check"><input type="checkbox" id="autoStop" checked> Stop automatically after release</label>
+
+      <div id="result" class="card" hidden>
+        <div class="card-head">
+          <h2 id="resTitle">Result</h2>
+          <span id="resBadge" class="badge" hidden>New max</span>
+        </div>
+        <div class="stats">
+          <div><span class="k">Peak</span><span class="v" id="resPeak"></span></div>
+          <div><span class="k">% body weight</span><span class="v" id="resBw"></span></div>
+          <div><span class="k">vs. your max</span><span class="v" id="resVsMax"></span></div>
+          <div><span class="k">Avg under load</span><span class="v" id="resAvg"></span></div>
+          <div><span class="k">Time under load</span><span class="v" id="resTul"></span></div>
+          <div><span class="k">Hold</span><span class="v"><input id="resHold" placeholder="e.g. 20 mm, half crimp"></span></div>
+        </div>
+        <label class="check" id="resUpdateMaxWrap"><input type="checkbox" id="resUpdateMax"> Set as my max for this hand</label>
+        <div class="row">
+          <button id="discardBtn" class="btn">Discard</button>
+          <button id="saveBtn" class="btn btn-primary">Save</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- History -->
+    <section id="view-history" class="view">
+      <div class="bests" id="bests"></div>
+      <div class="seg seg-small" id="histFilter">
+        <button data-filter="all" aria-pressed="true">All</button>
+        <button data-filter="left">Left</button>
+        <button data-filter="right">Right</button>
+        <button data-filter="both">Both</button>
+      </div>
+      <ul id="histList" class="list"></ul>
+      <p id="histEmpty" class="empty" hidden>No measurements yet.</p>
+    </section>
+
+    <!-- Profile -->
+    <section id="view-profile" class="view">
+      <form id="profileForm" class="card form">
+        <label>Name <input name="name" autocomplete="off"></label>
+        <label>Body weight (kg) <input name="weightKg" type="number" step="0.1" min="0" inputmode="decimal"></label>
+        <label>Max left hand (kg) <input name="maxLeftKg" type="number" step="0.1" min="0" inputmode="decimal"></label>
+        <label>Max right hand (kg) <input name="maxRightKg" type="number" step="0.1" min="0" inputmode="decimal"></label>
+        <label>Max both hands (kg) <input name="maxBothKg" type="number" step="0.1" min="0" inputmode="decimal"></label>
+        <label class="check"><input type="checkbox" name="autoUpdateMax"> Suggest updating max when I beat it</label>
+        <button class="btn btn-primary" type="submit">Save profile</button>
+        <p id="profileSaved" class="hint" hidden>Saved.</p>
+      </form>
+
+      <div class="card">
+        <h2>Data</h2>
+        <p class="hint">Everything is stored only on this phone. Export a backup to move it to another device.</p>
+        <div class="row">
+          <button id="exportBtn" class="btn">Export</button>
+          <label class="btn">Import<input id="importInput" type="file" accept="application/json,.json" hidden></label>
+        </div>
+        <p id="storageInfo" class="hint"></p>
+      </div>
+
+      <div class="card">
+        <h2>Board</h2>
+        <label class="check"><input type="checkbox" id="showAll"> Show all Bluetooth devices when connecting</label>
+        <button id="demoBtn" class="btn">Use demo board (no hardware)</button>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs">
+    <button data-view="measure" aria-current="page">Measure</button>
+    <button data-view="history">History</button>
+    <button data-view="profile">Profile</button>
+  </nav>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
