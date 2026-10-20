@@ -53,3 +53,15 @@ History is merged by measurement ID. A local deletion is not a distributed delet
 - https://learn.microsoft.com/en-us/rest/api/storageservices/create-user-delegation-sas
 - https://learn.microsoft.com/en-us/rest/api/storageservices/cross-origin-resource-sharing--cors--support-for-the-azure-storage-services
 - https://learn.microsoft.com/en-us/rest/api/storageservices/specifying-conditional-headers-for-blob-service-operations
+
+## Deployment verification — 2026-10-20
+
+Terraform deployment through GitHub Actions succeeded:
+https://github.com/jakubgitcode/climbross/actions/runs/39501623463
+
+The live `stclimbrossd0347fdf/profiles` container passed a test with synthetic data:
+30-day service SAS, browser CORS preflight, conditional upload, download, exposed
+ETag and rejected stale write (412). Anonymous access returned Azure's
+`PublicAccessNotPermitted` (409). Test blobs were deleted; retention can keep
+previous versions. End-to-end synchronization on two physical phones remains to
+be checked. No personal history was uploaded during these infrastructure tests.
