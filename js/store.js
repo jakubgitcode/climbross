@@ -1,3 +1,4 @@
+import { validatePlan } from './training.js';
 // Local-only storage: the profile and measurements live in IndexedDB on the phone.
 
 const DB_NAME = 'climbross';
@@ -52,6 +53,15 @@ export function saveProfile(profile) {
   return tx('kv', 'readwrite', (s) => s.put(profile, PROFILE_KEY));
 }
 
+export async function getTrainingPlans() {
+  return (await tx('kv', 'readonly', (s) => s.get('trainingPlans'))) || [];
+}
+
+export function saveTrainingPlans(plans) {
+  const valid = plans.map(validatePlan);
+  return tx('kv', 'readwrite', (s) => s.put(valid, 'trainingPlans'));
+}
+
 export function addMeasurement(m) {
   return tx('measurements', 'readwrite', (s) => s.put(m));
 }
@@ -72,6 +82,7 @@ export async function exportAll() {
     exportedAt: new Date().toISOString(),
     profile: await getProfile(),
     measurements: await listMeasurements(),
+    trainingPlans: await getTrainingPlans(),
   };
 }
 
@@ -79,6 +90,13 @@ export async function exportAll() {
 export async function importAll(data) {
   if (!data || data.app !== 'climbross' || !Array.isArray(data.measurements)) {
     throw new Error('Not a climbross export file');
+  }
+  const incomingPlans = data.trainingPlans === undefined ? [] : data.trainingPlans;
+  if (!Array.isArray(incomingPlans)) throw new Error('Invalid training plans');
+  const validPlans = incomingPlans.map(validatePlan);
+  if (validPlans.length) {
+    const plans = await getTrainingPlans();
+    await saveTrainingPlans([...plans.filter((p) => !validPlans.some((v) => v.name === p.name)), ...validPlans]);
   }
   if (data.profile) await saveProfile({ ...DEFAULT_PROFILE, ...data.profile });
   const db = await open();

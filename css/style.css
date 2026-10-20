@@ -132,7 +132,7 @@ canvas#chart { width: 100%; height: 160px; display: block; background: var(--sur
 
 .tabs {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 3;
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(4, 1fr);
   background: var(--surface); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -144,3 +144,32 @@ canvas#chart { width: 100%; height: 160px; display: block; background: var(--sur
   max-width: 528px; margin: 0 auto; background: var(--text); color: var(--bg);
   padding: 12px 14px; border-radius: 12px; font-size: 14px;
 }
+
+/* Guided training and force-controlled flight. */
+[hidden] { display: none !important; }
+.training-title { font-size: 26px; margin: 4px 0; }
+#trainingFields { border: 0; padding: 0; margin: 0; min-width: 0; }
+#trainingFields legend { font-weight: 700; margin-bottom: 10px; }
+#trainingFields:disabled { opacity: .55; }
+.training-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.training-grid input, .training-grid select { width: 100%; min-width: 0; }
+.form select { font: inherit; padding: 10px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); font-size: 16px; }
+.preset-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.preset-row .btn { font-size: 13px; padding: 8px 10px; }
+#trainingStart { width: 100%; margin-top: 12px; }
+.coach-clock { font-size: 32px; font-variant-numeric: tabular-nums; }
+.coach-force { font-size: 48px; font-weight: 750; font-variant-numeric: tabular-nums; margin: 10px 0 0; }
+.coach-hint { font-size: 20px; font-weight: 650; }
+#coachLive[data-zone="yes"] .coach-hint { color: var(--good); }
+.force-track { position: relative; height: 24px; margin: 16px 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 12px; }
+#forceZone { position: absolute; top: 0; bottom: 0; background: var(--good); opacity: .4; }
+#forceMarker { position: absolute; width: 6px; height: 32px; top: -5px; transform: translateX(-50%); background: var(--text); border-radius: 4px; }
+#flight { height: 210px; position: relative; overflow: hidden; border-radius: 12px; background: linear-gradient(#112b4a, #22586a); margin-top: 12px; }
+#flightBand { position: absolute; left: 0; right: 0; border-block: 2px dashed #91efbd; background: #68dda044; }
+#flightBird { position: absolute; left: 20%; top: 50%; transform: translateY(-50%); font-size: 38px; color: #fff3b0; text-shadow: 0 2px 5px #000; transition: top .1s linear; }
+.flight-stars { position: absolute; top: calc(50% - 16px); white-space: nowrap; font-size: 25px; color: #ffe29c; animation: flight-drift 5s linear infinite; animation-play-state: paused; }
+#flight[data-flying="yes"] .flight-stars { animation-play-state: running; }
+.mountains { position: absolute; inset: 60% 0 0; background: #102f48; clip-path: polygon(0 100%, 0 60%, 20% 10%, 34% 65%, 55% 0, 80% 80%, 92% 25%, 100% 50%, 100% 100%); }
+@keyframes flight-drift { from { transform: translateX(100%); } to { transform: translateX(-100%); } }
+@media (prefers-reduced-motion: reduce) { .flight-stars { animation: none; left: 55%; } #flightBird { transition: none; } }
+@media (max-width: 380px) { .tabs button { font-size: 12px; } .training-grid { gap: 0 8px; } }

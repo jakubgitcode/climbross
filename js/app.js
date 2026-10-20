@@ -1,6 +1,9 @@
 import * as ble from './ble.js';
 import * as store from './store.js';
 import { drawChart } from './chart.js';
+import { createCoach } from './coach.js';
+let coach;
+let demoConnection = false;
 
 const $ = (id) => document.getElementById(id);
 const fmt = (kg) => (Number.isFinite(kg) ? kg.toFixed(1) : '–');
@@ -40,6 +43,7 @@ function onReading(r) {
   while (state.rawRecent.length && now - state.rawRecent[0][0] > 600) state.rawRecent.shift();
 
   const kg = state.filter.push({ ...r, kg: r.kg - state.tare });
+  coach?.reading(kg, now);
   const rec = state.rec;
   if (rec) {
     const t = now - rec.start;
@@ -106,6 +110,7 @@ function drawMainChart() {
 // ---------- recording ----------
 
 function startRecording() {
+  if (coach?.active || coach?.pending) { toast('Najpierw zakończ i zapisz lub odrzuć trening.'); return; }
   hideResult();
   state.rec = {
     start: performance.now(), samples: [], peak: 0, peakT: 0,
@@ -192,6 +197,7 @@ async function saveResult() {
     maxBeforeKg: r.maxBeforeKg,
     hold,
     device: state.conn ? state.conn.name : null,
+    demo: demoConnection,
     samples: r.samples,
   });
   if ($('resUpdateMax').checked) {
@@ -220,6 +226,7 @@ async function toggleConnection(demo = false) {
   try {
     if (demo) {
       state.conn = ble.connectDemo(handlers);
+      demoConnection = true;
     } else {
       if (!ble.isSupported()) {
         toast('Web Bluetooth is not available. Use Chrome on Android, served over https.');
@@ -227,6 +234,7 @@ async function toggleConnection(demo = false) {
       }
       $('connectBtn').textContent = 'Connecting…';
       state.conn = await ble.connect(handlers);
+      demoConnection = false;
     }
     state.filter.reset();
     state.tare = 0;
@@ -241,6 +249,8 @@ async function toggleConnection(demo = false) {
 }
 
 function onDisconnected() {
+  coach?.disconnect();
+  state.rawRecent = [];
   if (!state.conn) return;
   if (state.rec) stopRecording();
   state.conn = null;
@@ -252,6 +262,7 @@ function onDisconnected() {
 }
 
 function tare() {
+  if (coach?.active || state.rec) { toast('Zerowanie jest dostępne przed rozpoczęciem pomiaru.'); return; }
   if (!state.rawRecent.length) { toast('Connect the board first.'); return; }
   state.tare = state.rawRecent.reduce((a, [, kg]) => a + kg, 0) / state.rawRecent.length;
   state.filter.reset();
@@ -274,7 +285,7 @@ document.addEventListener('visibilitychange', () => {
 async function renderHistory() {
   const all = await store.listMeasurements();
   const best = { left: 0, right: 0, both: 0 };
-  for (const m of all) best[m.hand] = Math.max(best[m.hand] || 0, m.peakKg);
+  for (const m of all.filter((m) => !m.demo)) best[m.hand] = Math.max(best[m.hand] || 0, m.peakKg);
 
   const bests = $('bests');
   bests.replaceChildren(
@@ -297,7 +308,7 @@ async function renderHistory() {
 function historyItem(m) {
   const d = new Date(m.date);
   const bw = m.bodyWeightKg > 0 ? ` · ${Math.round((m.peakKg / m.bodyWeightKg) * 100)}% BW` : '';
-  const sub = `${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${m.hold ? ' · ' + m.hold : ''}`;
+  const sub = `${m.demo ? 'DEMO · ' : ''}${m.training ? m.training.plan.name + ' · ' : ''}${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${m.hold ? ' · ' + m.hold : ''}`;
   const li = el('li', { class: 'item' },
     el('div', { class: 'item-main' },
       el('span', { class: `hand ${m.hand}` }, HAND_SHORT[m.hand]),
@@ -315,7 +326,11 @@ function historyItem(m) {
       renderHistory();
     });
     const stats = el('p', { class: 'hint' },
-      `Avg under load ${fmt(m.avgKg)} kg · time under load ${m.tulS.toFixed(1)} s` + (m.maxBeforeKg > 0 ? ` · ${Math.round((m.peakKg / m.maxBeforeKg) * 100)}% of max then` : ''));
+      `${m.training ? 'Avg during work' : 'Avg under load'} ${fmt(m.avgKg)} kg · time under load ${m.tulS.toFixed(1)} s` + (m.maxBeforeKg > 0 ? ` · ${Math.round((m.peakKg / m.maxBeforeKg) * 100)}% of max then` : ''));
+    if (m.training) {
+      const t = m.training;
+      stats.append(` · ${t.reason} · cel ${fmt(t.targetKg)} kg · w strefie ${t.zoneS.toFixed(1)} s (${t.accuracy.toFixed(0)}%) · ${t.completedReps}/${t.plan.reps * t.plan.sets} powt. · ★ ${t.points}`);
+    }
     li.append(el('div', { class: 'item-detail' }, canvas, stats, el('div', { class: 'row' }, del)));
     const peak = m.samples.reduce((p, s) => (s[1] > p[1] ? s : p), [0, 0]);
     drawChart(canvas, m.samples, { hand: m.hand, peak });
@@ -370,6 +385,8 @@ async function importData(e) {
   try {
     const n = await store.importAll(JSON.parse(await file.text()));
     state.profile = await store.getProfile();
+    await coach?.reloadPlans();
+    coach?.refresh();
     fillProfileForm();
     renderHistory();
     toast(`Imported ${n} measurements.`);
@@ -405,6 +422,7 @@ function showView(name) {
     if (b.dataset.view === name) b.setAttribute('aria-current', 'page');
     else b.removeAttribute('aria-current');
   }
+  if (name === 'training') coach?.refresh();
   if (name === 'history') renderHistory();
   if (name === 'profile') showStorageInfo();
   if (name === 'measure') state.dirty = true;
@@ -462,6 +480,11 @@ async function init() {
     toast(`Local storage unavailable, nothing will be saved: ${e.message || e}`);
   }
   fillProfileForm();
+  coach = createCoach({
+    context: () => ({ connected: !!state.conn, device: state.conn?.name, demo: demoConnection, profile: state.profile, recording: !!state.rec, pendingResult: !!state.result }),
+    busyChanged: (active) => { $('startBtn').disabled = active || !state.conn; $('tareBtn').disabled = active; },
+    toast, historyChanged: renderHistory,
+  });
   state.dirty = true;
   document.documentElement.dataset.ready = '1';
 }

@@ -66,6 +66,60 @@
       </div>
     </section>
 
+    <section id="view-training" class="view" lang="pl">
+      <h1 class="training-title">Siła pod kontrolą</h1>
+      <p class="hint">Trening na czas albo gra sterowana chwytem. Wybierz rękę i ustaw własne obciążenie.</p>
+      <form id="trainingForm" class="card form">
+        <fieldset id="trainingFields">
+          <legend>Twój plan</legend>
+          <div class="preset-row">
+            <button type="button" class="btn" data-preset="endurance">Endurance 20%</button>
+            <button type="button" class="btn" data-preset="repeaters">Repeatery 20 kg</button>
+            <button type="button" class="btn" data-preset="flight">★ Lot przez kanion</button>
+          </div>
+          <p class="hint">Presety to edytowalne przykłady. Cel % oznacza procent siły maksymalnej zapisanej w profilu dla wybranej ręki.</p>
+          <label>Zapisane plany <select id="savedPlans"><option value="">Wybierz zapisany plan</option></select></label>
+          <label>Nazwa planu <input name="name" maxlength="60" required></label>
+          <div class="training-grid">
+            <label>Tryb <select name="mode"><option value="training">Trening</option><option value="game">Gra: lot przez kanion</option></select></label>
+            <label>Ręka <select name="hand"><option value="left">Lewa</option><option value="right" selected>Prawa</option><option value="both">Obie razem</option></select></label>
+            <label>Jednostka celu <select name="unit"><option value="percent">% maksimum ręki</option><option value="kg">kg</option></select></label>
+            <label>Cel <input name="target" type="number" min="0.1" max="100" step="0.1" required></label>
+            <label>Tolerancja ± (% celu) <input name="tolerance" type="number" min="1" max="50" step="1" required></label>
+            <label>Praca (s) <input name="workS" type="number" min="1" max="600" step="1" required></label>
+            <label>Odpoczynek (s) <input name="restS" type="number" min="0" max="600" step="1" required></label>
+            <label>Powtórzenia w serii <input name="reps" type="number" min="1" max="50" required></label>
+            <label>Serie <input name="sets" type="number" min="1" max="10" required></label>
+            <label>Przerwa między seriami (s) <input name="setRestS" type="number" min="0" max="900" required></label>
+          </div>
+          <p id="planPreview" class="hint" aria-live="polite"></p>
+          <p id="flightIntro" class="hint" hidden>Większa siła podnosi lotnika. Utrzymuj go w zielonym pasie: każda sekunda w strefie to jedna gwiazda. Podczas odpoczynku rozluźnij chwyt.</p>
+          <button id="planSave" type="button" class="btn">Zapisz plan lokalnie</button>
+        </fieldset>
+        <button id="trainingStart" class="btn btn-primary" type="submit">Rozpocznij · 5 s odliczania</button>
+        <p class="hint">Trening zatrzyma się po utracie danych lub przejściu aplikacji w tło.</p>
+      </form>
+      <div id="coachLive" class="card" hidden>
+        <div class="card-head"><h2 id="coachPhase" aria-live="polite"></h2><b id="coachTime" class="coach-clock"></b></div>
+        <p id="coachRound" class="hint"></p>
+        <div id="flight" role="img" hidden>
+          <div class="mountains"></div><div id="flightBand"></div>
+          <div class="flight-stars" aria-hidden="true">✦　　　✦　　　✦　　　✦</div>
+          <div id="flightBird" aria-hidden="true">➤</div>
+        </div>
+        <div id="coachForce" class="coach-force"></div>
+        <p id="coachTarget" class="hint"></p>
+        <div class="force-track" aria-hidden="true"><div id="forceZone"></div><div id="forceMarker"></div></div>
+        <p id="coachHint" class="coach-hint"></p>
+        <p id="coachScore" class="hint"></p>
+        <button id="trainingStop" type="button" class="btn stop" hidden>Zatrzymaj</button>
+      </div>
+      <div id="coachResult" class="card" hidden>
+        <h2 id="coachResultTitle"></h2><p id="coachResultText"></p>
+        <div class="row"><button id="coachDiscard" class="btn">Odrzuć</button><button id="coachSave" class="btn btn-primary">Zapisz wynik</button></div>
+      </div>
+    </section>
+
     <!-- History -->
     <section id="view-history" class="view">
       <div class="bests" id="bests"></div>
@@ -112,6 +166,7 @@
 
   <nav class="tabs">
     <button data-view="measure" aria-current="page">Measure</button>
+    <button data-view="training">Trening / Gra</button>
     <button data-view="history">History</button>
     <button data-view="profile">Profile</button>
   </nav>
