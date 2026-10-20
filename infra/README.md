@@ -40,3 +40,30 @@ Versioning and seven-day soft delete protect accidental changes. Old blob versio
 are retained and incur storage charges; review retention as usage grows.
 `prevent_destroy` protects accounts/containers from routine Terraform deletion,
 but is not an Azure resource lock. Review plans when changing infrastructure.
+
+## Current deployment
+
+- Subscription: `sandbox` (`9099b832-a63d-4792-b9f0-6b7b9a271059`)
+- Region: West Europe
+- Profile resource group: `rg-climbross`
+- Profile account: `stclimbrossd0347fdf`, container: `profiles`
+- State resource group: `rg-climbross-bootstrap`
+- State account: `stclimbrosstfd0347fdf`
+- Bootstrap state: `bootstrap-state/bootstrap.tfstate`
+- Application state: `tfstate/profiles.tfstate`
+
+Create a private URL for a new profile:
+
+```sh
+python3 tools/create-profile-sas.py \
+  --account stclimbrossd0347fdf --resource-group rg-climbross \
+  --container profiles --days 30
+```
+
+Every invocation without `--blob` creates a distinct profile path. Share each URL
+privately with its intended user and renew using the same blob path.
+
+This repository's GitHub OIDC subject includes immutable owner/repository IDs:
+`repo:jakubgitcode@278524708/climbross@1399947263:environment:azure-production`.
+When adapting the configuration to another repository, use its actual OIDC
+subject format, not an assumed name-only subject.

@@ -56,7 +56,7 @@ resource "azurerm_federated_identity_credential" "github" {
   user_assigned_identity_id = azurerm_user_assigned_identity.github.id
   audience                  = ["api://AzureADTokenExchange"]
   issuer                    = "https://token.actions.githubusercontent.com"
-  subject                   = "repo:jakubgitcode/climbross:environment:azure-production"
+  subject                   = "repo:jakubgitcode@278524708/climbross@1399947263:environment:azure-production"
 }
 resource "azurerm_role_assignment" "deploy" {
   scope                = azurerm_resource_group.app.id
