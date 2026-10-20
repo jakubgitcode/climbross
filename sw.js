@@ -1,7 +1,7 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
-const CACHE = 'climbross-v2-training';
+const CACHE = 'climbross-v3-profiles-jump';
 const SHELL = [
-  './', 'index.html', 'css/style.css', 'js/app.js', 'js/ble.js', 'js/store.js', 'js/chart.js', 'js/training.js', 'js/coach.js',
+  './', 'index.html', 'css/style.css', 'js/app.js', 'js/ble.js', 'js/store.js', 'js/chart.js', 'js/training.js', 'js/coach.js', 'js/jump.js', 'js/cloud.js', 'js/profiles.js',
   'manifest.webmanifest', 'icon.svg',
 ];
 

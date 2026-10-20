@@ -1,3 +1,4 @@
+import { drawRunner } from './jump.js';
 import { PRESETS, MAX_KEYS, validatePlan, durationMs, resolveTarget, TrainingSession } from './training.js';
 import * as store from './store.js';
 
@@ -27,6 +28,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
       $('planPreview').textContent = `${HAND[hand]} · cel ${kg(force)} · strefa ${kg(force * (1 - p.tolerance / 100))}–${kg(force * (1 + p.tolerance / 100))} · ${time(durationMs(p) / 1000)} z odliczaniem`;
     } catch (e) { $('planPreview').textContent = e.message; }
     $('flightIntro').hidden = form.elements.mode.value !== 'game';
+    $('jumpIntro').hidden = form.elements.mode.value !== 'jump';
   }
   function listPlans() {
     $('savedPlans').replaceChildren(new Option('Wybierz zapisany plan', ''), ...plans.map((p, i) => new Option(p.name, String(i))));
@@ -51,6 +53,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
   function start(e) {
     e.preventDefault();
     const c = context();
+    if (c.busy) { toast('Poczekaj na zakończenie operacji profilu.'); return; }
     if (!c.connected) { toast('Najpierw połącz deskę lub włącz Demo.'); return; }
     if (c.recording || c.pendingResult || result) { toast('Najpierw zapisz lub odrzuć poprzedni wynik.'); return; }
     if (session) return;
@@ -62,6 +65,8 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
       $('coachResult').hidden = true;
       $('coachLive').hidden = false;
       $('flight').hidden = session.plan.mode !== 'game';
+      $('runner').hidden = session.plan.mode !== 'jump';
+      $('demoJump').hidden = session.plan.mode !== 'jump' || !session.demo;
       lock(true);
       draw();
       $('coachLive').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -79,6 +84,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     const s = result.summary();
     $('coachResultTitle').textContent = `${s.reason}${result.demo ? ' · DEMO' : ''}`;
     $('coachResultText').textContent = `${HAND[result.hand]} · cel ${kg(s.targetKg)} · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. W strefie ${s.zoneS.toFixed(1)} z ${s.workS.toFixed(1)} s (${s.accuracy.toFixed(0)}%). Szczyt ${kg(result.peakKg)}.${s.plan.mode === 'game' ? ` Zdobyte gwiazdy: ${s.points}.` : ''}`;
+    if (s.game) $('coachResultText').textContent += ` Przeskoczone: ${s.game.cleared}, trafione: ${s.game.missed}, skoki: ${s.game.jumps}.`;
     $('coachSave').disabled = false;
     $('trainingStart').disabled = true;
   }
@@ -101,6 +107,13 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     $('forceZone').style.left = `${session.minKg / (session.targetKg * 2) * 100}%`;
     $('forceZone').style.width = `${session.plan.tolerance}%`;
     $('coachScore').textContent = `W strefie ${(session.zoneMs / 1000).toFixed(1)} s · ★ ${Math.floor(session.zoneMs / 1000)}`;
+    if (session.jumpGame) {
+      drawRunner($('runner'), session.jumpGame, work);
+      $('demoJump').disabled = !work;
+      $('coachScore').textContent = `★ ${session.jumpGame.cleared} przeskoczonych · × ${session.jumpGame.missed} trafionych`;
+      $('coachHint').textContent = !work ? 'Rozluźnij chwyt' : session.demo ? 'Dotknij „Skok” przed przeszkodą' : session.jumpGame.armed ? `Dociągnij do ${kg(session.targetKg)}, żeby skoczyć` : `Odpuść poniżej ${kg(session.targetKg / 2)}, aby przygotować kolejny skok`;
+      $('runner').setAttribute('aria-label', $('coachScore').textContent + '. ' + $('coachHint').textContent);
+    }
     const bird = $('flightBird');
     bird.style.top = `${Math.max(8, Math.min(92, 100 - session.kg / (session.targetKg * 2) * 100))}%`;
     $('flightBand').style.top = `${50 - session.plan.tolerance / 2}%`;
@@ -130,6 +143,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
   form.addEventListener('input', preview);
   form.addEventListener('submit', start);
   $('trainingStop').addEventListener('click', () => finish('Zatrzymano ręcznie'));
+  $('demoJump').addEventListener('click', () => { if (session?.demo && session.phase.kind === 'work') session.jumpGame?.jump(); });
   $('planSave').addEventListener('click', savePlan);
   $('savedPlans').addEventListener('change', (e) => { if (e.target.value !== '') fill(plans[Number(e.target.value)]); });
   $('coachSave').addEventListener('click', saveResult);
@@ -142,6 +156,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     disconnect() { finish('Przerwano: rozłączono deskę.'); },
     get active() { return !!session; },
     get pending() { return !!result; },
-    refresh() { preview(); }, reloadPlans,
+    refresh() { preview(); },
+    resetPlan() { fill(PRESETS.endurance); }, reloadPlans,
   };
 }

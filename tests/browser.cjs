@@ -107,6 +107,82 @@ const server = http.createServer((req, res) => {
     assert.equal(await page.locator('#startBtn').innerText(), 'Start');
     await page.locator('[data-view="training"]').click(); await page.locator('#coachDiscard').click();
     console.log('PASS percentage training, manual stop and unsaved result guard');
+    // Existing profile/database remains intact; new profiles get isolated history.
+    const original = await page.evaluate(async () => (await import('./js/store.js')).exportAll());
+    await page.locator('[data-view="profile"]').click();
+    await page.locator('#newProfileName').fill('Friend'); await page.locator('#createProfile').click();
+    await page.waitForFunction(() => document.querySelector('#activeProfileBadge').textContent === 'Friend');
+    assert.equal((await page.evaluate(async () => (await import('./js/store.js')).listMeasurements())).length, 0);
+    assert.equal((await page.evaluate(async () => (await import('./js/store.js')).getTrainingPlans())).length, 0);
+    assert.equal(await page.locator('[name="maxLeftKg"]').inputValue(), '');
+    const friendId = await page.locator('#profileSelect').inputValue();
+    await page.locator('#profileSelect').selectOption('default');
+    await page.waitForFunction(() => document.querySelector('#profileForm [name="maxLeftKg"]').value === '50');
+    assert.deepEqual((await page.evaluate(async () => (await import('./js/store.js')).exportAll())).measurements, original.measurements);
+    console.log('PASS legacy data preserved and profile isolation');
+    // Mock Azure only: no real cloud account or real SAS is used in tests.
+    let remote = null, version = 0, putCount = 0;
+    const resource = 'https://testaccount.blob.core.windows.net/profiles/test.json';
+    const sas = resource + '?sr=b&sp=rcw&spr=https&se=' + encodeURIComponent(new Date(Date.now()+86400000).toISOString()) + '&sig=FAKE_NOT_A_REAL_SECRET';
+    await page.route('https://testaccount.blob.core.windows.net/**', async route => {
+      const req = route.request(), headers = { 'access-control-allow-origin': '*', 'access-control-expose-headers': 'ETag', etag: '"v'+version+'"', 'content-type': 'application/json' };
+      if (req.method() === 'OPTIONS') return route.fulfill({ status:204, headers:{...headers, 'access-control-allow-methods':'GET,PUT,OPTIONS', 'access-control-allow-headers':'*'} });
+      if (req.method() === 'PUT') {
+        const h=req.headers();
+        if ((remote && h['if-none-match']==='*') || (h['if-match'] && h['if-match']!=='"v'+version+'"')) return route.fulfill({status:412,headers,body:''});
+        remote=JSON.parse(req.postData());version++;putCount++;
+        return route.fulfill({status:201,headers:{...headers,etag:'"v'+version+'"'},body:''});
+      }
+      return route.fulfill({status:remote?200:404,headers,body:remote?JSON.stringify(remote):''});
+    });
+    await page.locator('#sasUrl').fill(sas);await page.locator('#saveSas').click();
+    await page.waitForFunction(() => !document.querySelector('#cloudUpload').disabled);
+    await page.locator('#cloudUpload').click();
+    await page.waitForFunction(() => document.querySelector('#cloudMessage').textContent.includes('zapisana w Azure'));
+    assert.equal(putCount,1);assert.equal(JSON.stringify(remote).includes('FAKE_NOT_A_REAL_SECRET'),false);
+    version++; // another device updated the blob
+    await page.locator('#cloudUpload').click();
+    await page.waitForFunction(() => document.querySelector('#cloudMessage').textContent.includes('pobierz i połącz'));
+    assert.equal(putCount,1);
+    page.on('dialog', dialog => dialog.accept());
+    await page.locator('#cloudDownload').click();
+    await page.waitForFunction(() => document.querySelector('#cloudMessage').textContent.includes('Pobrano i połączono'));
+    await page.locator('#cloudUpload').click();
+    await page.waitForFunction(() => document.querySelector('#cloudMessage').textContent.includes('zapisana w Azure'));
+    assert.equal(putCount,2);
+    const exported=await page.evaluate(async () => (await import('./js/store.js')).exportAll());
+    assert.equal(JSON.stringify(exported).includes('FAKE_NOT_A_REAL_SECRET'),false);
+    // Invalid remote/import data cannot partly overwrite the local profile.
+    const invalid = { ...exported, profile: { name:'BAD', maxLeftKg:999 }, measurements:[{id:'bad'}] };
+    const rejection = await page.evaluate(async data => { try { await (await import('./js/store.js')).importAll(data); return false; } catch { return true; } }, invalid);
+    assert.equal(rejection,true);
+    assert.equal((await page.evaluate(async () => (await import('./js/store.js')).getProfile())).maxLeftKg,50);
+    console.log('PASS invalid import leaves profile and history intact');
+    await page.locator('#profileSelect').selectOption(friendId);
+    await page.waitForFunction(() => document.querySelector('#activeProfileBadge').textContent === 'Friend');
+    assert.equal(await page.locator('#cloudUpload').isDisabled(),true);
+    await page.locator('#sasUrl').fill(sas);await page.locator('#saveSas').click();
+    await page.waitForFunction(() => document.querySelector('#cloudMessage').textContent.includes('innego lokalnego profilu'));
+    await page.locator('#profileSelect').selectOption('default');
+    await page.waitForFunction(() => document.querySelector('#profileForm [name="maxLeftKg"]').value === '50');
+    console.log('PASS mock Azure create, conflict, download, retry and SAS isolation');
+    // Jump game UI and profile switching guard while a session is active.
+    await page.locator('[data-view="training"]').click();await page.locator('[data-preset="jumps"]').click();
+    await page.locator('#trainingForm [name="workS"]').fill('4');await page.locator('#trainingForm [name="reps"]').fill('1');
+    await page.locator('#trainingStart').click();
+    await page.locator('[data-view="profile"]').click();await page.locator('#profileSelect').selectOption(friendId);
+    assert.equal(await page.locator('#profileSelect').inputValue(),'default');
+    await page.locator('[data-view="training"]').click();
+    await page.waitForFunction(() => document.querySelector('#coachPhase').textContent.startsWith('Praca'));
+    await page.locator('#demoJump').click();
+    await page.locator('#coachLive').scrollIntoViewIfNeeded();
+    await page.screenshot({path:path.join(output,'jump-game.png')});
+    await page.waitForFunction(() => !document.querySelector('#coachResult').hidden);
+    assert.match(await page.locator('#coachResultText').innerText(),/skoki: 1/);
+    await page.locator('#coachSave').click();await page.waitForFunction(() => document.querySelector('#coachResult').hidden);
+    const all=await page.evaluate(async () => (await import('./js/store.js')).listMeasurements());
+    assert.equal(all[0].training.game.jumps,1);
+    console.log('PASS jump game, saved score and profile switch guard');
     await page.evaluate(async () => { await navigator.serviceWorker.ready; });
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     await context.setOffline(true);
@@ -116,6 +192,30 @@ const server = http.createServer((req, res) => {
     await page.locator('#savedPlans').selectOption('0');
     assert.equal(await page.locator('#trainingForm [name="target"]').inputValue(), '38');
     console.log('PASS offline shell at GitHub Pages subpath');
+    // Load the exact v1 DB shape before the current app initializes.
+    const legacyContext = await browser.newContext();
+    const legacy = await legacyContext.newPage();
+    await legacy.route(url, route => route.fulfill({body:'<!doctype html><title>Legacy setup</title>', contentType:'text/html'}));
+    await legacy.goto(url);
+    await legacy.evaluate(async () => {
+      await new Promise((resolve,reject) => {
+        const req=indexedDB.open('climbross',1);
+        req.onupgradeneeded=()=>{req.result.createObjectStore('kv');const s=req.result.createObjectStore('measurements',{keyPath:'id'});s.createIndex('date','date');};
+        req.onerror=()=>reject(req.error);
+        req.onsuccess=()=>{
+          const db=req.result,t=db.transaction(['kv','measurements'],'readwrite');
+          t.objectStore('kv').put({name:'Existing climber',weightKg:70,maxLeftKg:42},'profile');
+          t.objectStore('measurements').put({id:'old-record',date:'2026-09-30T10:00:00Z',hand:'left',peakKg:42,avgKg:30,tulS:5,durationS:8,samples:[[0,0],[100,42]]});
+          t.oncomplete=()=>{db.close();resolve();};t.onerror=()=>reject(t.error);
+        };
+      });
+    });
+    await legacy.unroute(url);await legacy.goto(url);
+    await legacy.waitForFunction(()=>document.documentElement.dataset.ready==='1');
+    await legacy.waitForFunction(()=>document.querySelector('#activeProfileBadge').textContent==='Existing climber');
+    const legacyData=await legacy.evaluate(async () => (await import('./js/store.js')).exportAll());
+    assert.equal(legacyData.profile.maxLeftKg,42);assert.equal(legacyData.measurements[0].id,'old-record');
+    await legacyContext.close();console.log('PASS existing v1 database migration without data loss');
     assert.deepEqual(errors, []);
     console.log('PASS no browser JavaScript errors');
   } finally { if (browser) await browser.close(); server.close(); }

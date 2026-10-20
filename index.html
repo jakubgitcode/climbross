@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">climbross</div>
+    <div class="brand">climbross<small id="activeProfileBadge" class="profile-badge"></small></div>
     <div class="status">
       <span id="battery" class="chip" hidden></span>
       <span id="mode" class="chip" hidden></span>
@@ -75,13 +75,14 @@
           <div class="preset-row">
             <button type="button" class="btn" data-preset="endurance">Endurance 20%</button>
             <button type="button" class="btn" data-preset="repeaters">Repeatery 20 kg</button>
+            <button type="button" class="btn" data-preset="jumps">↟ Skoki przez przeszkody</button>
             <button type="button" class="btn" data-preset="flight">★ Lot przez kanion</button>
           </div>
           <p class="hint">Presety to edytowalne przykłady. Cel % oznacza procent siły maksymalnej zapisanej w profilu dla wybranej ręki.</p>
           <label>Zapisane plany <select id="savedPlans"><option value="">Wybierz zapisany plan</option></select></label>
           <label>Nazwa planu <input name="name" maxlength="60" required></label>
           <div class="training-grid">
-            <label>Tryb <select name="mode"><option value="training">Trening</option><option value="game">Gra: lot przez kanion</option></select></label>
+            <label>Tryb <select name="mode"><option value="training">Trening</option><option value="game">Gra: lot przez kanion</option><option value="jump">Gra: skoki przez przeszkody</option></select></label>
             <label>Ręka <select name="hand"><option value="left">Lewa</option><option value="right" selected>Prawa</option><option value="both">Obie razem</option></select></label>
             <label>Jednostka celu <select name="unit"><option value="percent">% maksimum ręki</option><option value="kg">kg</option></select></label>
             <label>Cel <input name="target" type="number" min="0.1" max="100" step="0.1" required></label>
@@ -94,6 +95,7 @@
           </div>
           <p id="planPreview" class="hint" aria-live="polite"></p>
           <p id="flightIntro" class="hint" hidden>Większa siła podnosi lotnika. Utrzymuj go w zielonym pasie: każda sekunda w strefie to jedna gwiazda. Podczas odpoczynku rozluźnij chwyt.</p>
+          <p id="jumpIntro" class="hint" hidden>Dociągnij do celu, żeby skoczyć nad przeszkodą. Przed kolejnym skokiem odpuść poniżej połowy celu. Silniejsze ciągnięcie nie zwiększa skoku. W Demo sterujesz przyciskiem „Skok”.</p>
           <button id="planSave" type="button" class="btn">Zapisz plan lokalnie</button>
         </fieldset>
         <button id="trainingStart" class="btn btn-primary" type="submit">Rozpocznij · 5 s odliczania</button>
@@ -107,6 +109,8 @@
           <div class="flight-stars" aria-hidden="true">✦　　　✦　　　✦　　　✦</div>
           <div id="flightBird" aria-hidden="true">➤</div>
         </div>
+        <canvas id="runner" height="210" role="img" aria-label="Gra: skoki przez przeszkody" hidden></canvas>
+        <button id="demoJump" class="btn btn-primary" type="button" hidden>Skok (DEMO)</button>
         <div id="coachForce" class="coach-force"></div>
         <p id="coachTarget" class="hint"></p>
         <div class="force-track" aria-hidden="true"><div id="forceZone"></div><div id="forceMarker"></div></div>
@@ -135,6 +139,15 @@
 
     <!-- Profile -->
     <section id="view-profile" class="view">
+      <div class="card form" lang="pl">
+        <fieldset id="profileControls">
+          <legend>Profile na urządzeniu</legend>
+          <label>Aktywny profil <select id="profileSelect"></select></label>
+          <label>Nowy profil <input id="newProfileName" maxlength="60" placeholder="np. Kuba"></label>
+          <button id="createProfile" class="btn" type="button">Utwórz profil</button>
+          <p class="hint">Każdy profil ma osobną historię, maksima, plany i połączenie z Azure. To podział danych, nie blokada dostępu dla osób używających tego telefonu.</p>
+        </fieldset>
+      </div>
       <form id="profileForm" class="card form">
         <label>Name <input name="name" autocomplete="off"></label>
         <label>Body weight (kg) <input name="weightKg" type="number" step="0.1" min="0" inputmode="decimal"></label>
@@ -146,9 +159,21 @@
         <p id="profileSaved" class="hint" hidden>Saved.</p>
       </form>
 
+      <div class="card form" lang="pl">
+        <fieldset id="cloudControls">
+          <legend>Historia w Azure Blob</legend>
+          <p class="hint">Jeden prywatny plik JSON na profil. Wklej jego pełny URL z SAS (rw/rcw, HTTPS, ważność do 30 dni). Token zostanie zapisany tylko na tym urządzeniu.</p>
+          <label>URL pliku z SAS <input id="sasUrl" type="password" autocomplete="off" spellcheck="false" placeholder="https://konto.blob.core.windows.net/…"></label>
+          <div class="row"><button id="saveSas" class="btn" type="button">Zapisz SAS</button><button id="forgetSas" class="btn" type="button">Usuń SAS</button></div>
+          <p id="cloudStatus" class="hint"></p>
+          <div class="row"><button id="cloudUpload" class="btn btn-primary" type="button">Wyślij historię</button><button id="cloudDownload" class="btn" type="button">Pobierz i połącz</button></div>
+          <p id="cloudMessage" class="hint" role="status" aria-live="polite"></p>
+          <p class="hint">Synchronizacja jest ręczna. Na drugim telefonie utwórz profil, wpisz ten sam SAS i pobierz historię. Jeśli plik zmienił się w chmurze, najpierw pobierz i połącz dane. Po wygaśnięciu SAS wpisz nowy token do tego samego pliku.</p>
+        </fieldset>
+      </div>
       <div class="card">
         <h2>Data</h2>
-        <p class="hint">Everything is stored only on this phone. Export a backup to move it to another device.</p>
+        <p class="hint">Export/import dotyczy aktywnego profilu i nie zawiera tokenu SAS. Kopia w Azure powstaje po wybraniu „Wyślij historię”.</p>
         <div class="row">
           <button id="exportBtn" class="btn">Export</button>
           <label class="btn">Import<input id="importInput" type="file" accept="application/json,.json" hidden></label>

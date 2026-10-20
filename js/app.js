@@ -1,6 +1,8 @@
 import * as ble from './ble.js';
 import * as store from './store.js';
 import { drawChart } from './chart.js';
+import { createProfilePanel } from './profiles.js';
+let profilePanel;
 import { createCoach } from './coach.js';
 let coach;
 let demoConnection = false;
@@ -110,6 +112,7 @@ function drawMainChart() {
 // ---------- recording ----------
 
 function startRecording() {
+  if (profilePanel?.busy) { toast('Poczekaj na zakończenie operacji profilu.'); return; }
   if (coach?.active || coach?.pending) { toast('Najpierw zakończ i zapisz lub odrzuć trening.'); return; }
   hideResult();
   state.rec = {
@@ -329,6 +332,7 @@ function historyItem(m) {
       `${m.training ? 'Avg during work' : 'Avg under load'} ${fmt(m.avgKg)} kg · time under load ${m.tulS.toFixed(1)} s` + (m.maxBeforeKg > 0 ? ` · ${Math.round((m.peakKg / m.maxBeforeKg) * 100)}% of max then` : ''));
     if (m.training) {
       const t = m.training;
+      if (t.game) stats.append(` · przeskoczone ${t.game.cleared} · trafione ${t.game.missed}`);
       stats.append(` · ${t.reason} · cel ${fmt(t.targetKg)} kg · w strefie ${t.zoneS.toFixed(1)} s (${t.accuracy.toFixed(0)}%) · ${t.completedReps}/${t.plan.reps * t.plan.sets} powt. · ★ ${t.points}`);
     }
     li.append(el('div', { class: 'item-detail' }, canvas, stats, el('div', { class: 'row' }, del)));
@@ -352,6 +356,7 @@ function fillProfileForm() {
 
 async function saveProfileForm(e) {
   e.preventDefault();
+  if (profilePanel?.busy) { toast('Poczekaj na zakończenie operacji profilu.'); return; }
   const f = e.target;
   state.profile = {
     ...state.profile,
@@ -363,6 +368,7 @@ async function saveProfileForm(e) {
     autoUpdateMax: f.elements.autoUpdateMax.checked,
   };
   await store.saveProfile(state.profile);
+  await profilePanel?.refresh();
   $('profileSaved').hidden = false;
   setTimeout(() => { $('profileSaved').hidden = true; }, 2000);
   state.dirty = true;
@@ -382,17 +388,14 @@ async function importData(e) {
   const file = e.target.files[0];
   e.target.value = '';
   if (!file) return;
-  try {
-    const n = await store.importAll(JSON.parse(await file.text()));
-    state.profile = await store.getProfile();
-    await coach?.reloadPlans();
-    coach?.refresh();
-    fillProfileForm();
-    renderHistory();
+  await profilePanel.exclusive(async () => {
+    const id = store.activeProfileId();
+    const n = await store.importAll(JSON.parse(await file.text()), id);
+    state.profile = await store.getProfile(id);
+    await coach.reloadPlans(); coach.refresh(); fillProfileForm();
+    await renderHistory();
     toast(`Imported ${n} measurements.`);
-  } catch (err) {
-    toast(`Import failed: ${err.message}`);
-  }
+  });
 }
 
 async function showStorageInfo() {
@@ -475,17 +478,25 @@ async function init() {
   requestAnimationFrame(render);
 
   try {
+    await store.initProfiles();
     state.profile = await store.getProfile();
   } catch (e) {
     toast(`Local storage unavailable, nothing will be saved: ${e.message || e}`);
   }
   fillProfileForm();
   coach = createCoach({
-    context: () => ({ connected: !!state.conn, device: state.conn?.name, demo: demoConnection, profile: state.profile, recording: !!state.rec, pendingResult: !!state.result }),
+    context: () => ({ connected: !!state.conn, device: state.conn?.name, demo: demoConnection, profile: state.profile, recording: !!state.rec, pendingResult: !!state.result, busy: !!profilePanel?.busy }),
     busyChanged: (active) => { $('startBtn').disabled = active || !state.conn; $('tareBtn').disabled = active; },
     toast, historyChanged: renderHistory,
   });
   state.dirty = true;
+  profilePanel = createProfilePanel({
+    blocked: () => !!state.rec || !!state.result || !!coach?.active || !!coach?.pending,
+    reload: async () => {
+      state.profile = await store.getProfile(); fillProfileForm(); hideResult();
+      await coach.reloadPlans(); coach.resetPlan(); state.dirty = true; await renderHistory();
+    }, toast,
+  });
   document.documentElement.dataset.ready = '1';
 }
 

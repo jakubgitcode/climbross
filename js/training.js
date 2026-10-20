@@ -1,13 +1,15 @@
+import { JumpGame } from './jump.js';
 // Pure training clock. Force is kg; percentages use the selected hand's saved max.
 export const PRESETS = {
   endurance: { name: 'Endurance 20%', mode: 'training', unit: 'percent', target: 20, tolerance: 10, workS: 30, restS: 30, reps: 6, sets: 1, setRestS: 120 },
   repeaters: { name: 'Repeatery 20 kg', mode: 'training', unit: 'kg', target: 20, tolerance: 10, workS: 7, restS: 3, reps: 6, sets: 3, setRestS: 120 },
+  jumps: { name: 'Skoki przez przeszkody', mode: 'jump', unit: 'percent', target: 20, tolerance: 10, workS: 30, restS: 30, reps: 3, sets: 1, setRestS: 60 },
   flight: { name: 'Lot przez kanion', mode: 'game', unit: 'percent', target: 20, tolerance: 15, workS: 20, restS: 20, reps: 3, sets: 1, setRestS: 60 },
 };
 export const MAX_KEYS = { left: 'maxLeftKg', right: 'maxRightKg', both: 'maxBothKg' };
 export function validatePlan(input) {
   const p = { ...input, name: String(input.name || 'Mój plan').trim().slice(0, 60) };
-  if (!['training', 'game'].includes(p.mode) || !['kg', 'percent'].includes(p.unit)) throw new Error('Nieprawidłowy tryb lub jednostka.');
+  if (!['training', 'game', 'jump'].includes(p.mode) || !['kg', 'percent'].includes(p.unit)) throw new Error('Nieprawidłowy tryb lub jednostka.');
   if (p.hand !== undefined && !Object.hasOwn(MAX_KEYS, p.hand)) throw new Error('Wybierz rękę.');
   const limits = { target: [0.1, p.unit === 'percent' ? 100 : 300], tolerance: [1, 50], workS: [1, 600], restS: [0, 600], reps: [1, 50], sets: [1, 10], setRestS: [0, 900] };
   for (const [k, [min, max]] of Object.entries(limits)) {
@@ -31,6 +33,7 @@ export class TrainingSession {
     this.plan = validatePlan(plan);
     this.hand = hand;
     this.targetKg = resolveTarget(this.plan, hand, profile);
+    this.jumpGame = this.plan.mode === 'jump' ? new JumpGame(this.targetKg) : null;
     this.minKg = this.targetKg * (1 - this.plan.tolerance / 100);
     this.maxKg = this.targetKg * (1 + this.plan.tolerance / 100);
     this.started = now;
@@ -76,6 +79,7 @@ export class TrainingSession {
         this.workMs += end - cursor;
         // Do not award points for old sensor values between notifications.
         const measured = this.lastReading === null ? 0 : Math.max(0, Math.min(end, this.lastReading + 250) - cursor);
+        this.jumpGame?.advance(measured, this.demo ? 0 : this.kg);
         this.measuredMs += measured;
         this.forceIntegral += measured * this.kg;
         if (this.kg >= 1) this.loadMs += measured;
@@ -84,6 +88,7 @@ export class TrainingSession {
       cursor = end;
       if (end >= phase.end) {
         if (phase.kind === 'work') this.completedReps++;
+        this.jumpGame?.rest();
         this.phaseIndex++;
         if (this.phaseIndex >= this.phases.length) this.finish('Ukończono', end);
       }
@@ -99,7 +104,8 @@ export class TrainingSession {
       plan: this.plan, targetKg: this.targetKg, minKg: this.minKg, maxKg: this.maxKg,
       workS: this.workMs / 1000, zoneS: this.zoneMs / 1000,
       accuracy: this.workMs ? this.zoneMs / this.workMs * 100 : 0,
-      points: Math.floor(this.zoneMs / 1000), completedReps: this.completedReps,
+      points: this.jumpGame ? this.jumpGame.cleared : Math.floor(this.zoneMs / 1000), completedReps: this.completedReps,
+      ...(this.jumpGame ? { game: this.jumpGame.summary() } : {}),
       completed: this.reason === 'Ukończono', reason: this.reason,
     };
   }
