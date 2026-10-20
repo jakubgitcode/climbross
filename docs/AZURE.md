@@ -4,7 +4,7 @@ The app now supports **multiple local profiles** and manual cloud backup/merge. 
 
 ## Storage setup
 
-Choose an existing Azure Storage account or create one for this project. Use a **private container**, with a separate random blob path for each person, e.g. `profiles/<uuid>.json`. Do not publish container-wide SAS URLs in the GitHub Pages code. A SAS is a bearer credential: anyone with it can use its granted permissions until it expires or is revoked. CORS does not prevent access outside a browser.
+The project provisions a dedicated Azure Storage account through the GitHub Actions **Azure infrastructure** workflow and Terraform. See [infrastructure setup](../infra/README.md) for bootstrap, OIDC and state configuration. Use a **private container**, with a separate random blob path for each person, e.g. `profiles/<uuid>.json`. Do not publish container-wide SAS URLs in the GitHub Pages code. A SAS is a bearer credential: anyone with it can use its granted permissions until it expires or is revoked. CORS does not prevent access outside a browser.
 
 Configure Blob service CORS for:
 

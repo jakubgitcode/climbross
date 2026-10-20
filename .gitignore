@@ -3,3 +3,11 @@ test-results/
 sas-*.txt
 *.key
 .env*
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+*.tfplan
+tfplan
+crash.log

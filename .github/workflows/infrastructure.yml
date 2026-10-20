@@ -1,0 +1,75 @@
+name: Azure infrastructure
+on:
+  push:
+    branches: [main]
+    paths: ['infra/**', '.github/workflows/infrastructure.yml']
+  pull_request:
+    paths: ['infra/**', '.github/workflows/infrastructure.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: azure-infrastructure-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        directory: [infra, infra/bootstrap]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.16.1
+      - run: terraform fmt -check -recursive infra
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+        working-directory: ${{ matrix.directory }}
+      - run: terraform validate
+        working-directory: ${{ matrix.directory }}
+      - run: terraform test
+        if: matrix.directory == 'infra'
+        working-directory: infra
+  deploy:
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: azure-production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      ARM_USE_OIDC: 'true'
+      ARM_USE_AZUREAD: 'true'
+      TF_IN_AUTOMATION: 'true'
+      TF_VAR_resource_group_name: rg-climbross
+      TF_VAR_storage_account_name: ${{ vars.PROFILE_STORAGE_ACCOUNT }}
+      STATE_ACCOUNT: ${{ vars.TF_STATE_ACCOUNT }}
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: azure/login@8216e11d8cd9b42fe925c852af8e76311ff067ac # v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.16.1
+      - name: Initialize remote state
+        run: >-
+          terraform init -input=false -lockfile=readonly
+          -backend-config="storage_account_name=$STATE_ACCOUNT"
+          -backend-config="container_name=tfstate"
+          -backend-config="key=profiles.tfstate"
+          -backend-config="use_oidc=true"
+          -backend-config="use_azuread_auth=true"
+      - run: terraform plan -input=false -lock-timeout=5m -out=tfplan
+      - run: terraform apply -input=false -lock-timeout=5m tfplan
+      - name: Public resource names
+        run: terraform output
