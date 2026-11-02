@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { PRESETS, validatePlan, TrainingSession } from '../app/js/training.js';
-import { ShipGame, HALF_WIDTH } from '../app/js/ship.js';
-import { validateBackup } from '../app/js/store.js';
+import { PRESETS, validatePlan, TrainingSession } from '../js/training.js';
+import { ShipGame, HALF_WIDTH } from '../js/ship.js';
+import { validateBackup } from '../js/store.js';
 
 const profile = { maxLeftKg: 40, maxRightKg: 60, maxBothKg: 100 };
 const ship = (extra = {}) => ({ ...PRESETS.ship, ...extra });
