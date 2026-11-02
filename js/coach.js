@@ -12,7 +12,7 @@ const time = (s) => { const n = Math.ceil(s); return `${Math.floor(n / 60)}:${St
 export function createCoach({ context, busyChanged, toast, historyChanged }) {
   let session = null, result = null, plans = [], saving = false;
   const form = $('trainingForm');
-  const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS'];
+  const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'wind'];
   function readPlan() {
     return validatePlan(Object.fromEntries(fields.map((k) => [k, form.elements[k].value])));
   }
@@ -39,6 +39,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     $('flightIntro').hidden = form.elements.mode.value !== 'game';
     $('jumpIntro').hidden = form.elements.mode.value !== 'jump';
     $('shipIntro').hidden = !ship;
+    $('windRow').hidden = !ship;
   }
   function listPlans() {
     $('savedPlans').replaceChildren(new Option('Wybierz zapisany plan', ''), ...plans.map((p, i) => new Option(p.name, String(i))));
@@ -106,6 +107,8 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     session.tick(now);
     if (session.done) { finish(session.reason); return; }
     const p = session.phase, work = p.kind === 'work';
+    $('phaseFill').style.width = `${Math.max(0, Math.min(1, (p.end - now) / p.ms)) * 100}%`;
+    $('phaseBar').dataset.kind = p.kind;
     const fresh = session.lastReading !== null && now - session.lastReading <= 500;
     const inZone = fresh && session.kg >= session.minKg && session.kg <= session.maxKg;
     const ship = session.plan.mode === 'ship';

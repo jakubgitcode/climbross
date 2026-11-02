@@ -5,19 +5,35 @@
 // plan in % of each hand's maximum rewards equal effort and a plan in kg exposes asymmetry.
 export const HALF_WIDTH = 1.2;   // channel half-width, in distance units
 const V_MAX = 1;                 // units/s at thrust 1
-const THETA_MAX = 0.1;           // rad of yaw at thrust 1
+const THETA_MAX = 0.07;           // rad of yaw at thrust 1
 const MAX_THRUST = 1.5;
 const TAU_SPEED = { burn: 1.2, coast: 2.5 };
 const TAU_YAW = { burn: 0.8, coast: 1.0 };
+// Sideways speed that an on-target pull (thrust 1) settles at; 100% wind is calibrated against it.
+const LAT_EQ = V_MAX * Math.sin(THETA_MAX);
 const TRAIL_STEP = 0.08;
 const TRAIL_LENGTH = 90;
 
 export class ShipGame {
-  constructor() {
+  /**
+   * wind: 0 = calm, 1 = the wind that on-target pulls exactly cancel on average over a
+   * work + rest cycle, so the ship stays near the middle only if you hold the target force.
+   */
+  constructor({ wind = 0, workS = 1, restS = 0 } = {}) {
+    this.wind = Number.isFinite(wind) && wind > 0 ? wind : 0;
+    this.windSpeed = this.wind * LAT_EQ * workS / (workS + restS);
+    this.windDir = 0;
     this.distance = 0; this.hits = 0;
     this.y = 0; this.heading = 0; this.speed = 0; this.touching = false;
     this.engine = { left: { thrustMs: 0, ms: 0 }, right: { thrustMs: 0, ms: 0 } };
     this.trail = [];
+  }
+  /**
+   * The wind blows against the way the working hand steers, so the hand that is up has to
+   * pull to hold the middle. It is calm during the countdown and while changing hands.
+   */
+  setPhase(kind, hand) {
+    this.windDir = kind === 'work' || kind === 'rest' ? (hand === 'left' ? -1 : 1) : 0;
   }
   /** Force is applied for `ms` by `hand` against that hand's target. */
   advance(ms, kg, hand, targetKg) {
@@ -37,7 +53,7 @@ export class ShipGame {
       const s = dt / 1000;
       this.speed += (thrust * V_MAX - this.speed) * (1 - Math.exp(-s / TAU_SPEED[mode]));
       this.heading += (side * thrust * THETA_MAX - this.heading) * (1 - Math.exp(-s / TAU_YAW[mode]));
-      this.y += this.speed * Math.sin(this.heading) * s;
+      this.y += (this.speed * Math.sin(this.heading) + this.windDir * this.windSpeed) * s;
       this.distance += this.speed * s;
       if (Math.abs(this.y) > HALF_WIDTH) {
         if (!this.touching) { this.touching = true; this.hits++; this.speed *= 0.5; }
@@ -57,7 +73,7 @@ export class ShipGame {
     const left = this.average('left'), right = this.average('right');
     const stronger = Math.max(left, right);
     return {
-      type: 'ship', distance: this.distance, hits: this.hits,
+      type: 'ship', distance: this.distance, hits: this.hits, wind: this.wind,
       leftThrust: left, rightThrust: right,
       asymmetryPct: stronger > 0 ? Math.abs(left - right) / stronger * 100 : 0,
     };
@@ -80,6 +96,19 @@ export function drawShip(canvas, game, working, hand) {
     c.fillStyle = k % 2 ? '#ff7087' : '#ffcd75';
     c.beginPath(); c.arc(x, top - 2, 4, 0, Math.PI * 2); c.arc(x, bottom + 2, 4, 0, Math.PI * 2); c.fill();
   }
+  // The middle of the river: stay in this lane.
+  c.fillStyle = '#68dda01c'; c.fillRect(0, mid - 0.25 * unit, 420, 0.5 * unit);
+  // Wind streaks blow toward the bank the wind pushes the ship to.
+  if (game.wind > 0 && game.windDir) {
+    const still = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const slide = still ? 0 : (performance.now() / 1000 * 70 * Math.min(1.5, game.wind)) % 70;
+    c.strokeStyle = '#d3eaffaa'; c.lineWidth = 2;
+    for (let i = 0; i < 7; i++) {
+      const x = 40 + i * 58, travel = (i * 23 + slide) % 70 - 35, y = mid + game.windDir * travel;
+      c.beginPath(); c.moveTo(x, y - game.windDir * 9); c.lineTo(x, y + game.windDir * 9);
+      c.moveTo(x - 4, y + game.windDir * 5); c.lineTo(x, y + game.windDir * 9); c.lineTo(x + 4, y + game.windDir * 5); c.stroke();
+    }
+  }
   // Centre line and wake.
   c.setLineDash([6, 8]); c.strokeStyle = '#ffffff33'; c.lineWidth = 1;
   c.beginPath(); c.moveTo(0, mid); c.lineTo(420, mid); c.stroke(); c.setLineDash([]);
@@ -100,5 +129,10 @@ export function drawShip(canvas, game, working, hand) {
   c.restore();
   c.font = 'bold 16px system-ui'; c.fillStyle = '#fff';
   c.fillText(`⚓ ${game.distance.toFixed(1)}    ⚠ ${game.hits}`, 16, 24);
+  if (game.wind > 0) {
+    c.font = '14px system-ui'; c.textAlign = 'right'; c.fillStyle = '#d3eaff';
+    c.fillText(game.windDir ? `Wiatr ${Math.round(game.wind * 100)}% ${game.windDir < 0 ? '▲' : '▼'}` : 'Wiatr: cisza', 404, 24);
+    c.textAlign = 'left';
+  }
   if (!working) { c.font = '16px system-ui'; c.fillStyle = '#ffffffcc'; c.fillText('Dryfujesz — rozluźnij chwyt', 120, 205); }
 }

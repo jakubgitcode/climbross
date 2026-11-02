@@ -92,3 +92,47 @@ test('a ship result survives backup validation', () => {
   const m = { id: 'a', date: new Date().toISOString(), hand: s.hand, peakKg: s.peakKg, avgKg: 1, tulS: 1, durationS: 100, samples: s.samples, training: s.summary() };
   assert.equal(validateBackup({ app: 'climbross', measurements: [m] }).measurements.length, 1);
 });
+
+test('wind is a ship-only plan field with a sane range', () => {
+  assert.equal(validatePlan(ship()).wind, 100);
+  assert.equal(validatePlan(ship({ wind: undefined })).wind, 0, 'older saved plans have no wind');
+  assert.equal(validatePlan(ship({ wind: '' })).wind, 0);
+  for (const wind of [-1, 201, NaN, Infinity, 'strong']) assert.throws(() => validatePlan(ship({ wind })), /Wiatr/);
+  assert.equal('wind' in validatePlan({ ...PRESETS.repeaters, wind: 80 }), false);
+});
+
+test('wind blows against the steering side of the working hand and is calm between hands', () => {
+  const g = new ShipGame({ wind: 1, workS: 6, restS: 3 });
+  const dir = (kind, hand) => { g.setPhase(kind, hand); return g.windDir; };
+  assert.equal(dir('work', 'left'), -1);
+  assert.equal(dir('rest', 'left'), -1);
+  assert.equal(dir('work', 'right'), 1);
+  assert.equal(dir('setRest', 'right'), 0);
+  assert.equal(dir('ready', 'left'), 0);
+});
+
+test('an idle ship is pushed by the wind, and calm water leaves it where it is', () => {
+  const windy = new ShipGame({ wind: 1, workS: 6, restS: 3 });
+  windy.setPhase('rest', 'left'); windy.coast(5000);
+  assert.ok(windy.y < -0.1, `drifted toward the upper bank, y=${windy.y}`);
+  const calm = new ShipGame({ wind: 1, workS: 6, restS: 3 });
+  calm.setPhase('setRest', 'left'); calm.coast(5000);
+  assert.equal(calm.y, 0);
+  assert.equal(new ShipGame().windSpeed, 0, 'no wind by default');
+});
+
+test('with full wind only holding the target force keeps the ship in the middle', () => {
+  const track = (force, wind) => {
+    const s = new TrainingSession(ship({ wind }), 'left', profile, 0);
+    let max = 0;
+    for (let t = 0; !s.done && t < 900000; t += 50) {
+      s.tick(t); if (s.done) break;
+      s.reading(s.phase.kind === 'work' ? s.targetKg * force(s.phase.hand) : 0, t);
+      max = Math.max(max, Math.abs(s.shipGame.y));
+    }
+    return max;
+  };
+  assert.ok(track(() => 1, 100) < 0.3, 'on target stays centred');
+  assert.ok(track(() => 0.5, 100) > 0.6, 'too weak drifts off');
+  assert.ok(track(() => 1, 100) < track(() => 1, 0), 'wind makes on-target pulling easier than drifting alone');
+});

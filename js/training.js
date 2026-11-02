@@ -7,7 +7,7 @@ export const PRESETS = {
   jumps: { name: 'Skoki przez przeszkody', mode: 'jump', unit: 'percent', target: 20, tolerance: 10, workS: 30, restS: 30, reps: 3, sets: 1, setRestS: 60 },
   flight: { name: 'Lot przez kanion', mode: 'game', unit: 'percent', target: 20, tolerance: 15, workS: 20, restS: 20, reps: 3, sets: 1, setRestS: 60 },
   // Each set is one hand (they alternate); setRestS is the time to change hands.
-  ship: { name: 'Okręt z dwoma silnikami', mode: 'ship', hand: 'left', unit: 'percent', target: 30, tolerance: 20, workS: 3, restS: 3, reps: 4, sets: 4, setRestS: 6 },
+  ship: { name: 'Okręt z dwoma silnikami', mode: 'ship', hand: 'left', unit: 'percent', target: 30, tolerance: 20, workS: 6, restS: 3, reps: 3, sets: 4, setRestS: 6, wind: 100 },
 };
 export const MAX_KEYS = { left: 'maxLeftKg', right: 'maxRightKg', both: 'maxBothKg' };
 export function validatePlan(input) {
@@ -23,6 +23,11 @@ export function validatePlan(input) {
     p[k] = Number(input[k]);
     if (!Number.isFinite(p[k]) || p[k] < min || p[k] > max || (['reps', 'sets'].includes(k) && !Number.isInteger(p[k]))) throw new Error('Sprawdź wartości planu i dozwolone zakresy.');
   }
+  // Wind (in % of the wind that on-target pulls cancel out) only exists in ship mode.
+  if (p.mode === 'ship') {
+    p.wind = input.wind === undefined || input.wind === '' ? 0 : Number(input.wind);
+    if (!Number.isFinite(p.wind) || p.wind < 0 || p.wind > 200) throw new Error('Wiatr: wpisz od 0 do 200%.');
+  } else delete p.wind;
   if (durationMs(p) > 2 * 60 * 60 * 1000) throw new Error('Plan może trwać najwyżej 2 godziny.');
   return p;
 }
@@ -48,7 +53,7 @@ export class TrainingSession {
       : { [hand]: resolveTarget(p, hand, profile) };
     this.targetKg = this.targets[hand];
     this.jumpGame = p.mode === 'jump' ? new JumpGame(this.targetKg) : null;
-    this.shipGame = ship ? new ShipGame() : null;
+    this.shipGame = ship ? new ShipGame({ wind: p.wind / 100, workS: p.workS, restS: p.restS }) : null;
     this.started = now;
     this.lastTick = now;
     this.lastReading = null;
@@ -76,6 +81,7 @@ export class TrainingSession {
   // The target and zone follow the hand of the current phase (they only differ in ship mode).
   applyPhase() {
     this.currentHand = this.phase.hand;
+    this.shipGame?.setPhase(this.phase.kind, this.phase.hand);
     this.targetKg = this.targets[this.currentHand] ?? this.targetKg;
     this.minKg = this.targetKg * (1 - this.plan.tolerance / 100);
     this.maxKg = this.targetKg * (1 + this.plan.tolerance / 100);

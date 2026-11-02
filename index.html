@@ -93,11 +93,12 @@
             <label>Powtórzenia w serii <input name="reps" type="number" min="1" max="50" required></label>
             <label>Serie <input name="sets" type="number" min="1" max="10" required></label>
             <label>Przerwa między seriami (s) <input name="setRestS" type="number" min="0" max="900" required></label>
+            <label id="windRow" hidden>Wiatr (%) <input name="wind" type="number" min="0" max="200" step="10"></label>
           </div>
           <p id="planPreview" class="hint" aria-live="polite"></p>
           <p id="flightIntro" class="hint" hidden>Większa siła podnosi lotnika. Utrzymuj go w zielonym pasie: każda sekunda w strefie to jedna gwiazda. Podczas odpoczynku rozluźnij chwyt.</p>
           <p id="jumpIntro" class="hint" hidden>Dociągnij do celu, żeby skoczyć nad przeszkodą. Przed kolejnym skokiem odpuść poniżej połowy celu. Silniejsze ciągnięcie nie zwiększa skoku. W Demo sterujesz przyciskiem „Skok”.</p>
-          <p id="shipIntro" class="hint" hidden>Ręce pracują na zmianę: lewa napędza lewy silnik (okręt skręca w prawo), prawa napędza prawy (skręca w lewo). Równy wysiłek daje prosty kurs, a słabsza ręka znosi okręt w bok. Cel w % maksimum nagradza równy wysiłek, a cel w kg pokazuje różnicę siły rąk. Seria to jedna ręka (liczba serii musi być parzysta), a przerwa między seriami to czas na zmianę ręki.</p>
+          <p id="shipIntro" class="hint" hidden>Ręce pracują na zmianę: lewa napędza lewy silnik (okręt skręca w prawo), prawa napędza prawy (skręca w lewo). Równy wysiłek daje prosty kurs, a słabsza ręka znosi okręt w bok. Cel w % maksimum nagradza równy wysiłek, a cel w kg pokazuje różnicę siły rąk. Seria to jedna ręka (liczba serii musi być parzysta), a przerwa między seriami to czas na zmianę ręki. Wiatr wieje przeciw skrętowi ręki, która akurat pracuje: przy 100% okręt zostaje na środku tylko wtedy, gdy trzymasz siłę docelową (średnio w całym cyklu praca + odpoczynek), a słabszy lub mocniejszy chwyt spycha go z toru. Podczas odliczania i zmiany ręki jest cisza.</p>
           <button id="planSave" type="button" class="btn">Zapisz plan lokalnie</button>
         </fieldset>
         <button id="trainingStart" class="btn btn-primary" type="submit">Rozpocznij · 5 s odliczania</button>
@@ -105,6 +106,7 @@
       </form>
       <div id="coachLive" class="card" hidden>
         <div class="card-head"><h2 id="coachPhase" aria-live="polite"></h2><b id="coachTime" class="coach-clock"></b></div>
+        <div id="phaseBar" aria-hidden="true"><div id="phaseFill"></div></div>
         <p id="coachRound" class="hint"></p>
         <div id="flight" role="img" hidden>
           <div class="mountains"></div><div id="flightBand"></div>
