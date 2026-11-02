@@ -178,5 +178,5 @@ canvas#chart { width: 100%; height: 160px; display: block; background: var(--sur
 #profileControls, #cloudControls { border: 0; padding: 0; margin: 0; min-width: 0; }
 #profileControls legend, #cloudControls legend { font-size: 17px; font-weight: 700; margin-bottom: 10px; }
 #cloudStatus { overflow-wrap: anywhere; }
-#runner { display: block; width: 100%; height: 210px; border-radius: 12px; margin: 12px 0; }
+#runner, #shipCanvas { display: block; width: 100%; height: 210px; border-radius: 12px; margin: 12px 0; }
 #demoJump { width: 100%; touch-action: manipulation; }

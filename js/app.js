@@ -332,7 +332,8 @@ function historyItem(m) {
       `${m.training ? 'Avg during work' : 'Avg under load'} ${fmt(m.avgKg)} kg · time under load ${m.tulS.toFixed(1)} s` + (m.maxBeforeKg > 0 ? ` · ${Math.round((m.peakKg / m.maxBeforeKg) * 100)}% of max then` : ''));
     if (m.training) {
       const t = m.training;
-      if (t.game) stats.append(` · przeskoczone ${t.game.cleared} · trafione ${t.game.missed}`);
+      if (t.game?.type === 'jump') stats.append(` · przeskoczone ${t.game.cleared} · trafione ${t.game.missed}`);
+      if (t.game?.type === 'ship') stats.append(` · dystans ${t.game.distance.toFixed(1)} · uderzenia ${t.game.hits} · lewy ${(t.game.leftThrust * 100).toFixed(0)}% / prawy ${(t.game.rightThrust * 100).toFixed(0)}% celu`);
       stats.append(` · ${t.reason} · cel ${fmt(t.targetKg)} kg · w strefie ${t.zoneS.toFixed(1)} s (${t.accuracy.toFixed(0)}%) · ${t.completedReps}/${t.plan.reps * t.plan.sets} powt. · ★ ${t.points}`);
     }
     li.append(el('div', { class: 'item-detail' }, canvas, stats, el('div', { class: 'row' }, del)));
