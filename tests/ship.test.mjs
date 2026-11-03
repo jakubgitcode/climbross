@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PRESETS, validatePlan, TrainingSession } from '../js/training.js';
-import { ShipGame, HALF_WIDTH } from '../js/ship.js';
+import { ShipGame, HALF_WIDTH, BEND_HALF_WIDTH } from '../js/ship.js';
 import { validateBackup } from '../js/store.js';
 
 const profile = { maxLeftKg: 40, maxRightKg: 60, maxBothKg: 100 };
@@ -75,8 +75,10 @@ test('no pulling goes nowhere, and a stalled sensor only makes the ship glide', 
   const before = g.distance;
   g.advance(1000, NaN, 'left', 30); g.advance(-5, 30, 'left', 30); g.advance(1000, 30, 'up', 30); g.advance(1000, 30, 'left', 0);
   assert.equal(g.distance, before, 'invalid input is ignored');
+  const burnt = g.speed;
   g.coast(5000);
-  assert.ok(g.distance > before && g.speed < 0.2);
+  assert.ok(g.distance > before && g.speed < burnt, 'it slows down');
+  assert.ok(g.speed > burnt / 3, `it glides on for a good while, speed ${g.speed} of ${burnt}`);
 });
 
 test('thrust is capped and the bank is a wall, not a place to leave the channel', () => {
@@ -135,4 +137,110 @@ test('with full wind only holding the target force keeps the ship in the middle'
   assert.ok(track(() => 1, 100) < 0.3, 'on target stays centred');
   assert.ok(track(() => 0.5, 100) > 0.6, 'too weak drifts off');
   assert.ok(track(() => 1, 100) < track(() => 1, 0), 'wind makes on-target pulling easier than drifting alone');
+});
+
+test('the engines spin the ship up faster than the hull slows down', () => {
+  const g = new ShipGame();
+  g.advance(3000, 30, 'left', 30);
+  const top = g.speed;
+  assert.ok(top > 0.85, `speed after 3 s of pulling: ${top}`);
+  g.coast(3000);
+  assert.ok(g.speed > top * 0.55, `still moving after a 3 s rest: ${g.speed} of ${top}`);
+});
+
+test('anywhere inside the tolerance zone steers and drives like exactly on target', () => {
+  const at = (ratio) => { const g = new ShipGame({ tolerance: 0.2 }); g.advance(4000, 30 * ratio, 'left', 30); return g; };
+  const exact = at(1);
+  for (const r of [0.8, 0.9, 1.1, 1.2]) {
+    assert.equal(at(r).distance, exact.distance, `ratio ${r}`);
+    assert.equal(at(r).y, exact.y);
+  }
+  assert.ok(at(0.6).distance < exact.distance && at(1.4).distance > exact.distance, 'outside the zone the pull matters again');
+  assert.equal(at(0).distance, 0);
+  const g = new ShipGame({ tolerance: 0.2 }); g.advance(1000, 36, 'left', 30);
+  assert.ok(Math.abs(g.average('left') - 1.2) < 1e-9, 'the statistics still see the real force');
+});
+
+test('plan: river is ship-only, defaults to straight', () => {
+  assert.equal(validatePlan(ship()).river, 'straight');
+  assert.equal(validatePlan(ship({ river: undefined })).river, 'straight');
+  assert.equal(validatePlan(PRESETS.shipBends).river, 'bends');
+  assert.throws(() => validatePlan(ship({ river: 'rapids' })), /Rzeka/);
+  assert.equal('river' in validatePlan(PRESETS.repeaters), false);
+});
+
+test('rough water lies exactly where the plan says work, and the sections follow each other', () => {
+  const s = new TrainingSession(ship({ reps: 2, sets: 2, workS: 4, restS: 2, setRestS: 3 }), 'left', profile, 0);
+  const sec = s.shipGame.sections;
+  assert.deepEqual(sec.map((x) => x.kind), s.phases.map((p) => p.kind));
+  for (let i = 1; i < sec.length; i++) assert.ok(Math.abs(sec[i].d0 - sec[i - 1].d1) < 1e-9 && sec[i].d1 >= sec[i].d0);
+  const work = sec.find((x) => x.kind === 'work');
+  assert.equal(s.shipGame.sectionAt((work.d0 + work.d1) / 2).kind, 'work');
+  const rest = sec.find((x) => x.kind === 'rest');
+  assert.equal(s.shipGame.sectionAt((rest.d0 + rest.d1) / 2).kind, 'rest');
+  assert.equal(s.shipGame.sectionAt(-1), null);
+});
+
+test('on-target pulling arrives at each section when its phase starts', () => {
+  const s = new TrainingSession(ship({ wind: 0 }), 'left', profile, 0);
+  const marks = [];
+  for (let t = 0; !s.done && t < 900000; t += 50) {
+    s.tick(t); if (s.done) break;
+    const before = s.phaseIndex;
+    s.reading(s.phase.kind === 'work' ? s.targetKg : 0, t);
+    if (s.phaseIndex !== before || t === 0) marks.push([s.phaseIndex, s.shipGame.distance]);
+  }
+  const sec = s.shipGame.sections;
+  for (const [i, d] of marks.slice(1)) if (sec[i]) assert.ok(Math.abs(d - sec[i].d0) < 0.1, `phase ${i}: ship at ${d}, section starts at ${sec[i].d0}`);
+});
+
+test('a river with bends curves toward the working hand and an on-target pull follows it', () => {
+  const plan = ship({ river: 'bends', wind: 0 });
+  const s = run(plan);
+  const g = s.shipGame;
+  assert.equal(s.summary().game.bends, true);
+  assert.equal(g.hits, 0);
+  // Left hand steers down (+), so the first set curves the river that way, and the next set brings it back.
+  const first = g.sections.filter((x) => x.kind === 'work')[2], second = g.sections.filter((x) => x.kind === 'work')[3];
+  assert.ok(g.centre(first.d1) > 0.6, `river bent ${g.centre(first.d1)}`);
+  assert.ok(g.centre(second.d1) < g.centre(first.d1) - 0.1, 'the right hand bends it back');
+  let max = 0;
+  const t = new TrainingSession(plan, 'left', profile, 0);
+  for (let now = 0; !t.done && now < 900000; now += 50) {
+    t.tick(now); if (t.done) break;
+    t.reading(t.phase.kind === 'work' ? t.targetKg : 0, now);
+    max = Math.max(max, Math.abs(t.shipGame.y - t.shipGame.centre(t.shipGame.distance)));
+  }
+  assert.ok(max < 0.1, `on-target pull stays in the middle of the bends, off by ${max}`);
+});
+
+test('bends: wind is ignored, an off-target pull leaves the middle, a straight river does not move', () => {
+  assert.equal(new TrainingSession(PRESETS.shipBends, 'left', profile, 0).shipGame.wind, 0);
+  assert.equal(new TrainingSession(ship({ river: 'bends', wind: 150 }), 'left', profile, 0).shipGame.wind, 0);
+  const weak = run(ship({ river: 'bends', wind: 0 }), () => 0.4);
+  assert.ok(weak.shipGame.hits > 0, 'barely pulling falls out of the bends');
+  const straight = new TrainingSession(ship({ wind: 0 }), 'left', profile, 0).shipGame;
+  assert.equal(straight.centre(5), 0);
+  assert.equal(straight.path, null);
+});
+
+test('with the calibrated wind, anywhere in the tolerance zone is enough to stay in the middle', () => {
+  const track = (force, wind) => {
+    const s = new TrainingSession(ship({ wind }), 'left', profile, 0);
+    let max = 0;
+    for (let t = 0; !s.done && t < 900000; t += 50) {
+      s.tick(t); if (s.done) break;
+      s.reading(s.phase.kind === 'work' ? s.targetKg * force : 0, t);
+      max = Math.max(max, Math.abs(s.shipGame.y));
+    }
+    return max;
+  };
+  for (const force of [0.82, 1, 1.18]) assert.ok(track(force, 100) < 0.2, `force ${force}: off by ${track(force, 100)}`);
+  assert.ok(track(0.5, 100) > 0.4, 'well below the zone drifts');
+});
+
+test('a river with bends is narrower than a straight one', () => {
+  assert.equal(new TrainingSession(PRESETS.shipBends, 'left', profile, 0).shipGame.halfWidth, BEND_HALF_WIDTH);
+  assert.equal(new TrainingSession(PRESETS.ship, 'left', profile, 0).shipGame.halfWidth, HALF_WIDTH);
+  assert.ok(BEND_HALF_WIDTH < HALF_WIDTH);
 });

@@ -78,6 +78,7 @@
             <button type="button" class="btn" data-preset="jumps">↟ Skoki przez przeszkody</button>
             <button type="button" class="btn" data-preset="flight">★ Lot przez kanion</button>
             <button type="button" class="btn" data-preset="ship">⚓ Okręt z dwoma silnikami</button>
+            <button type="button" class="btn" data-preset="shipBends">⚓ Okręt: zakręty rzeki</button>
           </div>
           <p class="hint">Presety to edytowalne przykłady. Cel % oznacza procent siły maksymalnej zapisanej w profilu dla wybranej ręki.</p>
           <label>Zapisane plany <select id="savedPlans"><option value="">Wybierz zapisany plan</option></select></label>
@@ -93,12 +94,13 @@
             <label>Powtórzenia w serii <input name="reps" type="number" min="1" max="50" required></label>
             <label>Serie <input name="sets" type="number" min="1" max="10" required></label>
             <label>Przerwa między seriami (s) <input name="setRestS" type="number" min="0" max="900" required></label>
+            <label id="riverRow" hidden>Rzeka <select name="river"><option value="straight">Prosta, z wiatrem</option><option value="bends">Z zakrętami (bez wiatru)</option></select></label>
             <label id="windRow" hidden>Wiatr (%) <input name="wind" type="number" min="0" max="200" step="10"></label>
           </div>
           <p id="planPreview" class="hint" aria-live="polite"></p>
           <p id="flightIntro" class="hint" hidden>Większa siła podnosi lotnika. Utrzymuj go w zielonym pasie: każda sekunda w strefie to jedna gwiazda. Podczas odpoczynku rozluźnij chwyt.</p>
           <p id="jumpIntro" class="hint" hidden>Dociągnij do celu, żeby skoczyć nad przeszkodą. Przed kolejnym skokiem odpuść poniżej połowy celu. Silniejsze ciągnięcie nie zwiększa skoku. W Demo sterujesz przyciskiem „Skok”.</p>
-          <p id="shipIntro" class="hint" hidden>Ręce pracują na zmianę: lewa napędza lewy silnik (okręt skręca w prawo), prawa napędza prawy (skręca w lewo). Równy wysiłek daje prosty kurs, a słabsza ręka znosi okręt w bok. Cel w % maksimum nagradza równy wysiłek, a cel w kg pokazuje różnicę siły rąk. Seria to jedna ręka (liczba serii musi być parzysta), a przerwa między seriami to czas na zmianę ręki. Wiatr wieje przeciw skrętowi ręki, która akurat pracuje: przy 100% okręt zostaje na środku tylko wtedy, gdy trzymasz siłę docelową (średnio w całym cyklu praca + odpoczynek), a słabszy lub mocniejszy chwyt spycha go z toru. Podczas odliczania i zmiany ręki jest cisza.</p>
+          <p id="shipIntro" class="hint" hidden>Ręce pracują na zmianę: lewa napędza lewy silnik (okręt skręca w prawo), prawa napędza prawy (skręca w lewo). Dopóki trzymasz siłę w strefie tolerancji, okręt płynie jak na celu; słabszy lub mocniejszy chwyt zdejmuje go z kursu. Cel w % maksimum nagradza równy wysiłek, a cel w kg pokazuje różnicę siły rąk. Seria to jedna ręka (liczba serii musi być parzysta), a przerwa między seriami to czas na zmianę ręki. Woda jest wzburzona tam, gdzie masz pracować (czerwona brama), a spokojna, gdy odpoczywasz (zielona brama); okręt rozpędzony silnikami sunie jeszcze długo. Rzeka prosta: wiatr wieje przeciw skrętowi ręki, która pracuje, więc przy 100% okręt zostaje na środku tylko w strefie celu. Rzeka z zakrętami: w czasie pracy zakręca w stronę pracującej ręki, a w odpoczynku płynie prosto; wiatr jest wtedy wyłączony.</p>
           <button id="planSave" type="button" class="btn">Zapisz plan lokalnie</button>
         </fieldset>
         <button id="trainingStart" class="btn btn-primary" type="submit">Rozpocznij · 5 s odliczania</button>

@@ -12,7 +12,7 @@ const time = (s) => { const n = Math.ceil(s); return `${Math.floor(n / 60)}:${St
 export function createCoach({ context, busyChanged, toast, historyChanged }) {
   let session = null, result = null, plans = [], saving = false;
   const form = $('trainingForm');
-  const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'wind'];
+  const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'wind', 'river'];
   function readPlan() {
     return validatePlan(Object.fromEntries(fields.map((k) => [k, form.elements[k].value])));
   }
@@ -39,7 +39,8 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     $('flightIntro').hidden = form.elements.mode.value !== 'game';
     $('jumpIntro').hidden = form.elements.mode.value !== 'jump';
     $('shipIntro').hidden = !ship;
-    $('windRow').hidden = !ship;
+    $('riverRow').hidden = !ship;
+    $('windRow').hidden = !ship || form.elements.river.value === 'bends';
   }
   function listPlans() {
     $('savedPlans').replaceChildren(new Option('Wybierz zapisany plan', ''), ...plans.map((p, i) => new Option(p.name, String(i))));

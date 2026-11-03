@@ -1,5 +1,5 @@
 import { JumpGame } from './jump.js';
-import { ShipGame } from './ship.js';
+import { ShipGame, BEND_HALF_WIDTH } from './ship.js';
 // Pure training clock. Force is kg; percentages use the selected hand's saved max.
 export const PRESETS = {
   endurance: { name: 'Endurance 20%', mode: 'training', unit: 'percent', target: 20, tolerance: 10, workS: 30, restS: 30, reps: 6, sets: 1, setRestS: 120 },
@@ -7,7 +7,8 @@ export const PRESETS = {
   jumps: { name: 'Skoki przez przeszkody', mode: 'jump', unit: 'percent', target: 20, tolerance: 10, workS: 30, restS: 30, reps: 3, sets: 1, setRestS: 60 },
   flight: { name: 'Lot przez kanion', mode: 'game', unit: 'percent', target: 20, tolerance: 15, workS: 20, restS: 20, reps: 3, sets: 1, setRestS: 60 },
   // Each set is one hand (they alternate); setRestS is the time to change hands.
-  ship: { name: 'Okręt z dwoma silnikami', mode: 'ship', hand: 'left', unit: 'percent', target: 30, tolerance: 20, workS: 6, restS: 3, reps: 3, sets: 4, setRestS: 6, wind: 100 },
+  ship: { name: 'Okręt z dwoma silnikami', mode: 'ship', hand: 'left', unit: 'percent', target: 30, tolerance: 20, workS: 6, restS: 3, reps: 3, sets: 4, setRestS: 6, wind: 100, river: 'straight' },
+  shipBends: { name: 'Okręt: zakręty rzeki', mode: 'ship', hand: 'left', unit: 'percent', target: 30, tolerance: 20, workS: 6, restS: 3, reps: 3, sets: 4, setRestS: 6, wind: 0, river: 'bends' },
 };
 export const MAX_KEYS = { left: 'maxLeftKg', right: 'maxRightKg', both: 'maxBothKg' };
 export function validatePlan(input) {
@@ -23,11 +24,13 @@ export function validatePlan(input) {
     p[k] = Number(input[k]);
     if (!Number.isFinite(p[k]) || p[k] < min || p[k] > max || (['reps', 'sets'].includes(k) && !Number.isInteger(p[k]))) throw new Error('Sprawdź wartości planu i dozwolone zakresy.');
   }
-  // Wind (in % of the wind that on-target pulls cancel out) only exists in ship mode.
+  // Wind (in % of the wind that on-target pulls cancel out) and the river shape only exist in ship mode.
   if (p.mode === 'ship') {
     p.wind = input.wind === undefined || input.wind === '' ? 0 : Number(input.wind);
     if (!Number.isFinite(p.wind) || p.wind < 0 || p.wind > 200) throw new Error('Wiatr: wpisz od 0 do 200%.');
-  } else delete p.wind;
+    p.river = input.river === undefined || input.river === '' ? 'straight' : input.river;
+    if (!['straight', 'bends'].includes(p.river)) throw new Error('Rzeka: wybierz prostą albo z zakrętami.');
+  } else { delete p.wind; delete p.river; }
   if (durationMs(p) > 2 * 60 * 60 * 1000) throw new Error('Plan może trwać najwyżej 2 godziny.');
   return p;
 }
@@ -53,7 +56,6 @@ export class TrainingSession {
       : { [hand]: resolveTarget(p, hand, profile) };
     this.targetKg = this.targets[hand];
     this.jumpGame = p.mode === 'jump' ? new JumpGame(this.targetKg) : null;
-    this.shipGame = ship ? new ShipGame({ wind: p.wind / 100, workS: p.workS, restS: p.restS }) : null;
     this.started = now;
     this.lastTick = now;
     this.lastReading = null;
@@ -71,6 +73,11 @@ export class TrainingSession {
       // The change-over announces the hand that works next.
       if (set < p.sets && p.setRestS > 0) this.phases.push({ kind: 'setRest', ms: p.setRestS * 1000, set, rep: p.reps, hand: handOf(set + 1) });
     }
+    // The river is laid out from the schedule; wind would cancel the bends, so bends mean calm air.
+    this.shipGame = ship ? new ShipGame({
+      wind: p.river === 'bends' ? 0 : p.wind / 100, workS: p.workS, restS: p.restS, tolerance: p.tolerance / 100,
+      bends: p.river === 'bends', ...(p.river === 'bends' ? { halfWidth: BEND_HALF_WIDTH } : {}), schedule: this.phases.map(({ kind, ms, hand: h }) => ({ kind, ms, hand: h })),
+    }) : null;
     this.applyPhase();
     let offset = now;
     for (const phase of this.phases) { phase.start = offset; offset += phase.ms; phase.end = offset; }

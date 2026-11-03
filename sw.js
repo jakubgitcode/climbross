@@ -1,5 +1,5 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
-const CACHE = 'climbross-v5-ship-wind';
+const CACHE = 'climbross-v6-ship-river';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/ble.js', 'js/store.js', 'js/chart.js', 'js/training.js', 'js/coach.js', 'js/jump.js', 'js/ship.js', 'js/cloud.js', 'js/profiles.js',
   'manifest.webmanifest', 'icon.svg',
