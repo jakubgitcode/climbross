@@ -147,7 +147,7 @@ export class TrainingSession {
       ...(this.shipGame ? { targets: this.targets } : {}),
       workS: this.workMs / 1000, zoneS: this.zoneMs / 1000,
       accuracy: this.workMs ? this.zoneMs / this.workMs * 100 : 0,
-      points: this.shipGame ? Math.floor(this.shipGame.distance) : this.jumpGame ? this.jumpGame.cleared : Math.floor(this.zoneMs / 1000), completedReps: this.completedReps,
+      points: this.shipGame ? Math.floor(this.zoneMs / 1000) : this.jumpGame ? this.jumpGame.cleared : Math.floor(this.zoneMs / 1000), completedReps: this.completedReps,
       ...(this.jumpGame ? { game: this.jumpGame.summary() } : {}),
       ...(this.shipGame ? { game: this.shipGame.summary() } : {}),
       completed: this.reason === 'Ukończono', reason: this.reason,

@@ -98,7 +98,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     $('coachResultTitle').textContent = `${s.reason}${result.demo ? ' · DEMO' : ''}`;
     $('coachResultText').textContent = `${HAND[result.hand]} · cel ${kg(s.targetKg)} · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. W strefie ${s.zoneS.toFixed(1)} z ${s.workS.toFixed(1)} s (${s.accuracy.toFixed(0)}%). Szczyt ${kg(result.peakKg)}.${s.plan.mode === 'game' ? ` Zdobyte gwiazdy: ${s.points}.` : ''}`;
     if (s.game?.type === 'jump') $('coachResultText').textContent += ` Przeskoczone: ${s.game.cleared}, trafione: ${s.game.missed}, skoki: ${s.game.jumps}.`;
-    if (s.game?.type === 'ship') $('coachResultText').textContent = `Okręt · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. Dystans ${s.game.distance.toFixed(1)}, uderzenia w brzeg: ${s.game.hits}. Lewy silnik ${(s.game.leftThrust * 100).toFixed(0)}% celu, prawy ${(s.game.rightThrust * 100).toFixed(0)}% celu (różnica ${s.game.asymmetryPct.toFixed(0)}%). W strefie ${s.accuracy.toFixed(0)}% czasu pracy. Szczyt ${kg(result.peakKg)}.`;
+    if (s.game?.type === 'ship') $('coachResultText').textContent = `Okręt · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. Uderzenia w brzeg: ${s.game.hits}. Lewa ręka ${(s.game.leftThrust * 100).toFixed(0)}% celu, prawa ${(s.game.rightThrust * 100).toFixed(0)}% celu (różnica ${s.game.asymmetryPct.toFixed(0)}%). W strefie ${s.accuracy.toFixed(0)}% czasu pracy. Szczyt ${kg(result.peakKg)}.`;
     $('coachSave').disabled = false;
     $('trainingStart').disabled = true;
   }
@@ -126,9 +126,9 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     $('coachScore').textContent = `W strefie ${(session.zoneMs / 1000).toFixed(1)} s · ★ ${Math.floor(session.zoneMs / 1000)}`;
     if (session.shipGame) {
       drawShip($('shipCanvas'), session.shipGame, work, p.hand);
-      $('coachScore').textContent = `⚓ dystans ${session.shipGame.distance.toFixed(1)} · ⚠ uderzenia ${session.shipGame.hits}`;
+      $('coachScore').textContent = `★ ${Math.floor(session.zoneMs / 1000)} s w strefie · ⚠ uderzenia ${session.shipGame.hits}`;
       const engine = p.hand === 'left' ? 'lewym' : 'prawym';
-      $('coachHint').textContent = !work ? (p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : p.kind === 'ready' ? `Przygotuj się: zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką` : 'Puść i dryfuj') : !fresh ? 'Czekam na dane…' : `Napędzasz ${engine} silnikiem · ${Math.round(session.kg / session.targetKg * 100)}% celu`;
+      $('coachHint').textContent = !work ? (p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : p.kind === 'ready' ? `Przygotuj się: zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką` : 'Puść i odpocznij') : !fresh ? 'Czekam na dane…' : `Spychasz okręt w ${engine === 'lewym' ? 'lewo' : 'prawo'} · ${Math.round(session.kg / session.targetKg * 100)}% celu`;
       $('shipCanvas').setAttribute('aria-label', `${$('coachScore').textContent}. ${$('coachHint').textContent}`);
     }
     if (session.jumpGame) {
