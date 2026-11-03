@@ -5,10 +5,13 @@
 // rewards equal effort and a plan in kg exposes asymmetry.
 // Pulling anywhere inside the tolerance zone counts as exactly on target, so staying in the
 // zone is enough to hold the course.
-export const HALF_WIDTH = 1.2;   // channel half-width, in distance units
-export const BEND_HALF_WIDTH = 0.55; // a river with bends is narrower, or leaving its path would go unpunished
-const V_MAX = 1;                 // units/s, constant: the plan's phases always line up with the river
-const THETA_MAX = 0.07;           // rad of yaw at thrust 1
+export const HALF_WIDTH = 0.9;   // channel half-width, in distance units
+export const BEND_HALF_WIDTH = 0.5; // a river with bends is narrower, or leaving its path would go unpunished
+const V_MAX = 1.5;               // units/s, constant: the plan's phases always line up with the river
+const THETA_MAX = 0.065;          // rad of yaw at thrust 1
+// The current gently pulls the ship back toward the middle, so one weak or ragged pull does not
+// leave it off course for good (a hand can only push to one side).
+const RESTORE = 0.1;              // 1/s
 const MAX_THRUST = 1.5;
 const TAU_YAW = 0.5;              // s, how quickly the heading follows the engines
 const TRAIL_STEP = 0.08;
@@ -17,7 +20,7 @@ const SIM_STEP_MS = 50;
 
 // Sideways drift of one steady work + rest cycle of an on-target pull; 100% wind cancels it.
 function cycleDrift(workS, restS) {
-  const g = new ShipGame({ walls: false, trail: false });
+  const g = new ShipGame({ walls: false, trail: false, restore: 0 });
   let before = 0;
   for (let i = 0; i < 5; i++) { before = g.y; g.advance(workS * 1000, 1, 'left', 1); g.coast(restS * 1000); }
   return Math.abs(g.y - before);
@@ -32,7 +35,8 @@ export class ShipGame {
    * rough water where the plan says "work", calm water for the rest, and with `bends` a
    * river that curves toward the working hand for exactly as long as it works.
    */
-  constructor({ wind = 0, workS = 1, restS = 0, tolerance = 0, bends = false, schedule = null, walls = true, trail = true, halfWidth = HALF_WIDTH } = {}) {
+  constructor({ wind = 0, workS = 1, restS = 0, tolerance = 0, bends = false, schedule = null, walls = true, trail = true, halfWidth = HALF_WIDTH, restore = RESTORE } = {}) {
+    this.restore = restore;
     this.halfWidth = halfWidth;
     this.wind = Number.isFinite(wind) && wind > 0 ? wind : 0;
     this.tolerance = Number.isFinite(tolerance) ? Math.min(0.5, Math.max(0, tolerance)) : 0;
@@ -49,7 +53,7 @@ export class ShipGame {
   }
   // Runs an ideal on-target session once to learn where each phase falls along the river.
   #lay(schedule, bends) {
-    const ideal = new ShipGame({ tolerance: this.tolerance, walls: false, trail: false });
+    const ideal = new ShipGame({ tolerance: this.tolerance, walls: false, trail: false, restore: 0 });
     ideal.wind = this.wind; ideal.windSpeed = this.windSpeed;
     const path = [[0, 0]];
     for (const { kind, ms, hand } of schedule) {
@@ -110,15 +114,16 @@ export class ShipGame {
       const dt = Math.min(10, left); left -= dt;
       const s = dt / 1000;
       this.heading += (side * thrust * THETA_MAX - this.heading) * (1 - Math.exp(-s / TAU_YAW));
-      this.y += (this.speed * Math.sin(this.heading) + this.windDir * this.windSpeed) * s;
+      const middle = this.centre(this.distance);
+      this.y += (this.speed * Math.sin(this.heading) + this.windDir * this.windSpeed - this.restore * (this.y - middle)) * s;
       this.distance += this.speed * s;
       if (this.walls) {
-        const middle = this.centre(this.distance), off = this.y - middle;
+        const off = this.y - this.centre(this.distance);
         if (Math.abs(off) > this.halfWidth) {
           if (!this.touching) { this.touching = true; this.hits++; }
           if (Math.sign(this.heading) === Math.sign(off)) this.heading = 0;
-          this.y = middle + Math.sign(off) * this.halfWidth;
-        } else this.touching = false;
+          this.y = this.centre(this.distance) + Math.sign(off) * this.halfWidth;
+        } else if (Math.abs(off) < this.halfWidth * 0.8) this.touching = false;
       }
       if (this.keepTrail) {
         const last = this.trail.at(-1);
