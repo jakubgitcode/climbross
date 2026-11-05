@@ -128,7 +128,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
       drawShip($('shipCanvas'), session.shipGame, work, p.hand);
       $('coachScore').textContent = `★ ${Math.floor(session.zoneMs / 1000)} s w strefie · ⚠ uderzenia ${session.shipGame.hits}`;
       const engine = p.hand === 'left' ? 'lewym' : 'prawym';
-      $('coachHint').textContent = !work ? (p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : p.kind === 'ready' ? `Przygotuj się: zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką` : 'Puść i odpocznij') : !fresh ? 'Czekam na dane…' : `Spychasz okręt w ${engine === 'lewym' ? 'lewo' : 'prawo'} · ${Math.round(session.kg / session.targetKg * 100)}% celu`;
+      $('coachHint').textContent = !work ? (p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : p.kind === 'ready' ? `Przygotuj się: zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką` : 'Puść i odpocznij') : !fresh ? 'Czekam na dane…' : `Napędzasz ${engine} silnikiem, okręt skręca w ${engine === 'lewym' ? 'prawo' : 'lewo'} · ${Math.round(session.kg / session.targetKg * 100)}% celu`;
       $('shipCanvas').setAttribute('aria-label', `${$('coachScore').textContent}. ${$('coachHint').textContent}`);
     }
     if (session.jumpGame) {

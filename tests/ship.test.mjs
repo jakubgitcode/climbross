@@ -105,9 +105,9 @@ test('wind is a ship-only plan field with a sane range', () => {
 test('wind blows against the steering side of the working hand and is calm between hands', () => {
   const g = new ShipGame({ wind: 1, workS: 6, restS: 3 });
   const dir = (kind, hand) => { g.setPhase(kind, hand); return g.windDir; };
-  assert.equal(dir('work', 'left'), 1);
-  assert.equal(dir('rest', 'left'), 1);
-  assert.equal(dir('work', 'right'), -1);
+  assert.equal(dir('work', 'left'), -1);
+  assert.equal(dir('rest', 'left'), -1);
+  assert.equal(dir('work', 'right'), 1);
   assert.equal(dir('setRest', 'right'), 0);
   assert.equal(dir('ready', 'left'), 0);
 });
@@ -115,7 +115,7 @@ test('wind blows against the steering side of the working hand and is calm betwe
 test('an idle ship is pushed by the wind, and calm water leaves it where it is', () => {
   const windy = new ShipGame({ wind: 1, workS: 6, restS: 3 });
   windy.setPhase('rest', 'left'); windy.coast(5000);
-  assert.ok(windy.y > 0.1, `drifted toward the lower bank, y=${windy.y}`);
+  assert.ok(windy.y < -0.1, `drifted toward the upper bank, y=${windy.y}`);
   const calm = new ShipGame({ wind: 1, workS: 6, restS: 3 });
   calm.setPhase('setRest', 'left'); calm.coast(5000);
   assert.equal(calm.y, 0);
@@ -192,16 +192,16 @@ test('on-target pulling arrives at each section when its phase starts', () => {
   for (const [i, d] of marks.slice(1)) if (sec[i]) assert.ok(Math.abs(d - sec[i].d0) < 0.1, `phase ${i}: ship at ${d}, section starts at ${sec[i].d0}`);
 });
 
-test('a river with bends curves toward the working hand and an on-target pull follows it', () => {
+test('a river with bends curves the way the working hand turns the ship and an on-target pull follows it', () => {
   const plan = ship({ river: 'bends', wind: 0 });
   const s = run(plan);
   const g = s.shipGame;
   assert.equal(s.summary().game.bends, true);
   assert.equal(g.hits, 0);
-  // Left hand pushes up (-), so the first set curves the river that way, and the next set brings it back.
+  // Left hand drives the left engine, which turns the ship right (down, +), so the first set curves the river that way, and the next set brings it back.
   const first = g.sections.filter((x) => x.kind === 'work')[2], second = g.sections.filter((x) => x.kind === 'work')[3];
-  assert.ok(g.centre(first.d1) < -0.6, `river bent ${g.centre(first.d1)}`);
-  assert.ok(g.centre(second.d1) > g.centre(first.d1) + 0.1, 'the right hand bends it back');
+  assert.ok(g.centre(first.d1) > 0.6, `river bent ${g.centre(first.d1)}`);
+  assert.ok(g.centre(second.d1) < g.centre(first.d1) - 0.1, 'the right hand bends it back');
   let max = 0;
   const t = new TrainingSession(plan, 'left', profile, 0);
   for (let now = 0; !t.done && now < 900000; now += 50) {
@@ -243,12 +243,12 @@ test('a river with bends is narrower than a straight one', () => {
   assert.ok(BEND_HALF_WIDTH < HALF_WIDTH);
 });
 
-test('every bend goes toward the hand that works it, over the length of that work and no longer', () => {
+test('every bend turns the way its hand turns the ship (left hand = right bend), over the length of that work and no longer', () => {
   const g = new TrainingSession(ship({ river: 'bends', wind: 0 }), 'left', profile, 0).shipGame;
   const works = g.sections.filter((x) => x.kind === 'work');
   for (const w of works) {
     const turn = g.centre(w.d1) - g.centre(w.d0);
-    assert.ok(w.hand === 'left' ? turn < -0.3 : turn > 0.3, `${w.hand} hand bends ${turn}`);
+    assert.ok(w.hand === 'left' ? turn > 0.3 : turn < -0.3, `${w.hand} hand bends ${turn} (left hand = bend to the right = down)`);
   }
   for (const r of g.sections.filter((x) => x.kind === 'rest')) {
     assert.ok(Math.abs(g.centre(r.d1) - g.centre(r.d0)) < 0.1, 'rest is straight (apart from easing out of the bend)');
@@ -271,7 +271,7 @@ test('the gates always line up with the phases, however hard you pull', () => {
 
 test('the current pulls a ship that was knocked off course back toward the middle', () => {
   const g = new ShipGame();
-  for (let i = 0; i < 4; i++) g.advance(1000, 30, 'right', 30);
+  for (let i = 0; i < 4; i++) g.advance(1000, 30, 'left', 30);
   const off = g.y;
   assert.ok(off > 0.2);
   g.coast(10000);

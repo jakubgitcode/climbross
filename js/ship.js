@@ -1,6 +1,7 @@
 // Ship with two side engines. The board has one force channel, so the hands work in turns:
-// the ship sails at a constant speed and the pulling hand pushes it to its own side (left
-// hand to the left, right hand to the right). A weaker pull steers less. Thrust is force
+// the ship sails at a constant speed. The left hand drives the left engine, which turns the
+// ship to the right; the right hand drives the right engine and turns it to the left. A
+// weaker pull steers less. Thrust is force
 // relative to the target of the hand that is pulling, so a plan in % of each hand's maximum
 // rewards equal effort and a plan in kg exposes asymmetry.
 // Pulling anywhere inside the tolerance zone counts as exactly on target, so staying in the
@@ -33,7 +34,7 @@ export class ShipGame {
    * tolerance: the half-width of the zone (share of the target) that counts as on target.
    * schedule: [{ kind, ms, hand }] of the whole session. It lays the river out in distance:
    * rough water where the plan says "work", calm water for the rest, and with `bends` a
-   * river that curves toward the working hand for exactly as long as it works.
+   * river that turns away from the working hand's engine (left hand: bend to the right) for exactly as long as it works.
    */
   constructor({ wind = 0, workS = 1, restS = 0, tolerance = 0, bends = false, schedule = null, walls = true, trail = true, halfWidth = HALF_WIDTH, restore = RESTORE } = {}) {
     this.restore = restore;
@@ -92,7 +93,7 @@ export class ShipGame {
    * pull to hold the middle. It is calm during the countdown and while changing hands.
    */
   setPhase(kind, hand) {
-    this.windDir = kind === 'work' || kind === 'rest' ? (hand === 'left' ? 1 : -1) : 0;
+    this.windDir = kind === 'work' || kind === 'rest' ? (hand === 'left' ? -1 : 1) : 0;
   }
   /** Force is applied for `ms` by `hand` against that hand's target. */
   advance(ms, kg, hand, targetKg) {
@@ -102,13 +103,13 @@ export class ShipGame {
     const effective = Math.abs(ratio - 1) <= tol ? 1 : ratio < 1 ? ratio / (1 - tol) : ratio - tol;
     const e = this.engine[hand];
     e.thrustMs += Math.min(MAX_THRUST, ratio) * ms; e.ms += ms;
-    this.#run(ms, Math.min(MAX_THRUST, effective), hand === 'left' ? -1 : 1);
+    this.#run(ms, Math.min(MAX_THRUST, effective), hand === 'left' ? 1 : -1);
   }
   /** Rest, preparation, or a stale sensor: the ship keeps gliding. */
   coast(ms) {
     if (Number.isFinite(ms) && ms > 0) this.#run(ms, 0, 0);
   }
-  // `side`: -1 pushes the ship up (left hand), +1 down (right hand).
+  // `side`: +1 turns the ship right, down on screen (left engine), -1 left, up (right engine).
   #run(ms, thrust, side) {
     for (let left = ms; left > 0;) {
       const dt = Math.min(10, left); left -= dt;
@@ -241,7 +242,7 @@ export function drawShip(canvas, game, working, hand) {
     c.fillStyle = colour;
     c.beginPath(); c.arc(x, m - hw - 2, 5, 0, 7); c.arc(x, m + hw + 2, 5, 0, 7); c.fill();
   });
-  // Ship, pointing right. The left engine is the upper one and pushes the ship up.
+  // Ship, pointing right. The left engine is the upper one; driving it turns the ship down (right).
   c.save(); c.translate(SHIP_X, MID + (game.y - cam) * PX); c.rotate(game.heading * 1.4);
   c.fillStyle = '#7be6e5'; c.beginPath(); c.moveTo(24, 0); c.lineTo(-16, -11); c.lineTo(-16, 11); c.closePath(); c.fill();
   c.fillStyle = '#0c2740'; c.fillRect(-4, -4, 12, 8);

@@ -11,7 +11,7 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand">climbross<small id="activeProfileBadge" class="profile-badge"></small></div>
+    <div class="brand">climbross<small id="activeProfileBadge" class="profile-badge"></small><small id="buildTag" class="profile-badge"></small></div>
     <div class="status">
       <span id="battery" class="chip" hidden></span>
       <span id="mode" class="chip" hidden></span>
@@ -100,7 +100,7 @@
           <p id="planPreview" class="hint" aria-live="polite"></p>
           <p id="flightIntro" class="hint" hidden>Większa siła podnosi lotnika. Utrzymuj go w zielonym pasie: każda sekunda w strefie to jedna gwiazda. Podczas odpoczynku rozluźnij chwyt.</p>
           <p id="jumpIntro" class="hint" hidden>Dociągnij do celu, żeby skoczyć nad przeszkodą. Przed kolejnym skokiem odpuść poniżej połowy celu. Silniejsze ciągnięcie nie zwiększa skoku. W Demo sterujesz przyciskiem „Skok”.</p>
-          <p id="shipIntro" class="hint" hidden>Okręt płynie ze stałą prędkością, więc bramy zawsze zgadzają się z planem. Pracująca ręka spycha go na swoją stronę: lewa w lewo, prawa w prawo. Dopóki trzymasz siłę w strefie tolerancji, działa jak na celu; słabszy lub mocniejszy chwyt zdejmuje okręt z kursu. Punkty to sekundy w strefie. Ręce pracują na zmianę (seria = jedna ręka, liczba serii musi być parzysta), a przerwa między seriami to czas na zmianę ręki. Woda jest wzburzona tam, gdzie masz pracować (czerwona brama), a spokojna, gdy odpoczywasz (zielona brama). Rzeka prosta: wiatr wieje przeciw ręce, która pracuje, więc przy 100% okręt zostaje na środku tylko w strefie celu. Rzeka z zakrętami: przez cały czas pracy zakręca w stronę pracującej ręki (zakręt w prawo = prawa ręka), a w odpoczynku płynie prosto; wiatr jest wtedy wyłączony.</p>
+          <p id="shipIntro" class="hint" hidden>Okręt płynie ze stałą prędkością, więc bramy zawsze zgadzają się z planem. Lewa ręka napędza lewy silnik i skręca okręt w prawo, prawa napędza prawy silnik i skręca go w lewo. Dopóki trzymasz siłę w strefie tolerancji, działa jak na celu; słabszy lub mocniejszy chwyt zdejmuje okręt z kursu. Punkty to sekundy w strefie. Ręce pracują na zmianę (seria = jedna ręka, liczba serii musi być parzysta), a przerwa między seriami to czas na zmianę ręki. Woda jest wzburzona tam, gdzie masz pracować (czerwona brama), a spokojna, gdy odpoczywasz (zielona brama). Rzeka prosta: wiatr wieje przeciw skrętowi pracującej ręki, więc przy 100% okręt zostaje na środku tylko w strefie celu. Rzeka z zakrętami: przez cały czas pracy zakręca w tę stronę, w którą skręca okręt (lewa ręka = zakręt w prawo, prawa ręka = zakręt w lewo), a w odpoczynku płynie prosto; wiatr jest wtedy wyłączony.</p>
           <button id="planSave" type="button" class="btn">Zapisz plan lokalnie</button>
         </fieldset>
         <button id="trainingStart" class="btn btn-primary" type="submit">Rozpocznij · 5 s odliczania</button>

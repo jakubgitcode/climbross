@@ -481,7 +481,11 @@ async function init() {
     navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadWorker) toast('Pobrano nową wersję aplikacji. Zamknij ją i otwórz ponownie.'); });
   }
   // Which version of the files is this page running? Mixed old and new files cause odd bugs.
-  caches?.keys().then((keys) => { $('buildInfo').textContent = `Wersja aplikacji: ${keys.find((k) => k.startsWith('climbross-')) || 'bez pamięci podręcznej'}`; }).catch(() => {});
+  caches?.keys().then((keys) => {
+    const name = keys.find((k) => k.startsWith('climbross-')) || 'bez pamięci podręcznej';
+    $('buildInfo').textContent = `Wersja aplikacji: ${name}`;
+    $('buildTag').textContent = name.replace('climbross-', '');
+  }).catch(() => {});
   requestAnimationFrame(render);
 
   try {
