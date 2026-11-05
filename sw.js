@@ -1,12 +1,12 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
-const CACHE = 'climbross-v8-ship-steady';
+const CACHE = 'climbross-v9-ship-steady';
 const SHELL = [
   './', 'index.html', 'css/style.css', 'js/app.js', 'js/ble.js', 'js/store.js', 'js/chart.js', 'js/training.js', 'js/coach.js', 'js/jump.js', 'js/ship.js', 'js/cloud.js', 'js/profiles.js',
   'manifest.webmanifest', 'icon.svg',
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((url) => new Request(url, { cache: 'reload' })))).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {
@@ -22,7 +22,7 @@ self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.open(CACHE).then(async (cache) => {
       const cached = await cache.match(e.request, { ignoreSearch: true });
-      const fresh = fetch(e.request)
+      const fresh = fetch(e.request, { cache: 'no-cache' })
         .then((res) => { if (res.ok) cache.put(e.request, res.clone()); return res; })
         .catch(() => cached);
       return cached || fresh;

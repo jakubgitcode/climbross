@@ -475,7 +475,13 @@ async function init() {
   $('importInput').addEventListener('change', importData);
   window.addEventListener('resize', () => { state.dirty = true; });
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) {
+    const hadWorker = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadWorker) toast('Pobrano nową wersję aplikacji. Zamknij ją i otwórz ponownie.'); });
+  }
+  // Which version of the files is this page running? Mixed old and new files cause odd bugs.
+  caches?.keys().then((keys) => { $('buildInfo').textContent = `Wersja aplikacji: ${keys.find((k) => k.startsWith('climbross-')) || 'bez pamięci podręcznej'}`; }).catch(() => {});
   requestAnimationFrame(render);
 
   try {
