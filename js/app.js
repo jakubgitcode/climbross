@@ -6,6 +6,7 @@ let profilePanel;
 import { createCoach } from './coach.js';
 let coach;
 let demoConnection = false;
+let demoManual = false;
 
 const $ = (id) => document.getElementById(id);
 const fmt = (kg) => (Number.isFinite(kg) ? kg.toFixed(1) : '–');
@@ -228,8 +229,9 @@ async function toggleConnection(demo = false) {
   const handlers = { onReading, onDisconnect: onDisconnected, showAll: $('showAll').checked };
   try {
     if (demo) {
-      state.conn = ble.connectDemo(handlers);
+      state.conn = ble.connectDemo(handlers, { manual: demo === 'manual' });
       demoConnection = true;
+      demoManual = demo === 'manual';
     } else {
       if (!ble.isSupported()) {
         toast('Web Bluetooth is not available. Use Chrome on Android, served over https.');
@@ -238,6 +240,7 @@ async function toggleConnection(demo = false) {
       $('connectBtn').textContent = 'Connecting…';
       state.conn = await ble.connect(handlers);
       demoConnection = false;
+      demoManual = false;
     }
     state.filter.reset();
     state.tare = 0;
@@ -457,6 +460,7 @@ async function init() {
   setHand(state.hand);
   $('connectBtn').addEventListener('click', () => toggleConnection(false));
   $('demoBtn').addEventListener('click', () => { if (!state.conn) toggleConnection(true); showView('measure'); });
+  $('demoManualBtn').addEventListener('click', () => { if (!state.conn) toggleConnection('manual'); showView('training'); });
   $('startBtn').addEventListener('click', () => (state.rec ? stopRecording() : startRecording()));
   $('tareBtn').addEventListener('click', tare);
   $('saveBtn').addEventListener('click', saveResult);
@@ -496,8 +500,9 @@ async function init() {
   }
   fillProfileForm();
   coach = createCoach({
-    context: () => ({ connected: !!state.conn, device: state.conn?.name, demo: demoConnection, profile: state.profile, recording: !!state.rec, pendingResult: !!state.result, busy: !!profilePanel?.busy }),
+    context: () => ({ connected: !!state.conn, device: state.conn?.name, demo: demoConnection, manualDemo: demoManual, profile: state.profile, recording: !!state.rec, pendingResult: !!state.result, busy: !!profilePanel?.busy }),
     busyChanged: (active) => { $('startBtn').disabled = active || !state.conn; $('tareBtn').disabled = active; },
+    demoForce: (kg) => state.conn?.setForce?.(kg),
     toast, historyChanged: renderHistory,
   });
   state.dirty = true;

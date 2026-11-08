@@ -118,6 +118,12 @@
         <canvas id="runner" height="210" role="img" aria-label="Gra: skoki przez przeszkody" hidden></canvas>
         <div id="ship" hidden><canvas id="shipCanvas" height="210" role="img" aria-label="Gra: okręt z dwoma silnikami"></canvas></div>
         <button id="demoJump" class="btn btn-primary" type="button" hidden>Skok (DEMO)</button>
+        <div id="demoHand" class="demo-hand" lang="pl" hidden>
+          <label for="demoPower">Moc symulowanej ręki: <b id="demoPowerOut"></b></label>
+          <input id="demoPower" type="range" min="0" max="200" step="5" value="100">
+          <button id="demoPull" class="btn btn-primary" type="button">Trzymaj, aby ciągnąć (DEMO)</button>
+          <label class="check"><input id="demoLatch" type="checkbox"> Zablokuj (ciągnij bez trzymania)</label>
+        </div>
         <div id="coachForce" class="coach-force"></div>
         <p id="coachTarget" class="hint"></p>
         <div class="force-track" aria-hidden="true"><div id="forceZone"></div><div id="forceMarker"></div></div>
@@ -192,6 +198,8 @@
         <h2>Board</h2>
         <label class="check"><input type="checkbox" id="showAll"> Show all Bluetooth devices when connecting</label>
         <button id="demoBtn" class="btn">Use demo board (no hardware)</button>
+        <button id="demoManualBtn" class="btn">Use demo board, manual (hold button, set power)</button>
+        <p class="hint">Manual demo: in Training, hold the button to pull and set the power with the slider.</p>
       </div>
       <p id="buildInfo" class="hint" lang="pl"></p>
     </section>

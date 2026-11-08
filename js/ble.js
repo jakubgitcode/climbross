@@ -143,8 +143,9 @@ export async function connect({ onReading, onDisconnect, showAll = false }) {
 }
 
 /** Fake board for trying the app without hardware: pull, hold, release. */
-export function connectDemo({ onReading }) {
+export function connectDemo({ onReading }, { manual = false } = {}) {
   const start = performance.now();
+  if (manual) return connectManualDemo(onReading);
   const timer = setInterval(() => {
     const t = ((performance.now() - start) / 1000) % 12;
     let kg = 0;
@@ -157,4 +158,25 @@ export function connectDemo({ onReading }) {
     onReading({ kg: Math.max(0, kg), pcbV2: true, battery: 87, hanging: true });
   }, 1000 / 80);
   return { name: 'Demo board', disconnect: () => clearInterval(timer) };
+}
+
+/**
+ * Fake board driven by hand: the UI calls setForce(kg) and the reading follows it
+ * with a short ramp (like a real pull) plus a little sensor noise.
+ */
+function connectManualDemo(onReading) {
+  const RATE = 80, TAU = 0.12;
+  let want = 0, kg = 0;
+  const timer = setInterval(() => {
+    kg += (want - kg) * (1 - Math.exp(-1 / (RATE * TAU)));
+    if (want === 0 && kg < 0.05) kg = 0;
+    const noisy = kg > 1 ? kg + (Math.random() - 0.5) * 0.4 : kg;
+    onReading({ kg: Math.max(0, noisy), pcbV2: true, battery: 87, hanging: true });
+  }, 1000 / RATE);
+  return {
+    name: 'Demo board (ręczny)',
+    manual: true,
+    setForce(value) { want = Math.max(0, Number(value) || 0); },
+    disconnect: () => clearInterval(timer),
+  };
 }

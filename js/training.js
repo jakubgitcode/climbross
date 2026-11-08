@@ -116,7 +116,7 @@ export class TrainingSession {
         this.workMs += end - cursor;
         // Do not award points for old sensor values between notifications.
         const measured = this.lastReading === null ? 0 : Math.max(0, Math.min(end, this.lastReading + 250) - cursor);
-        this.jumpGame?.advance(measured, this.demo ? 0 : this.kg);
+        this.jumpGame?.advance(measured, this.demo && !this.demoManual ? 0 : this.kg);
         if (this.shipGame) {
           this.shipGame.advance(measured, this.kg, phase.hand, this.targetKg);
           this.shipGame.coast(end - cursor - measured);

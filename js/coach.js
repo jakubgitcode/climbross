@@ -9,8 +9,9 @@ const PHASE = { ready: 'Przygotuj się', work: 'Praca', rest: 'Odpoczynek', setR
 const kg = (v) => `${v.toFixed(1)} kg`;
 const time = (s) => { const n = Math.ceil(s); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
 
-export function createCoach({ context, busyChanged, toast, historyChanged }) {
+export function createCoach({ context, busyChanged, toast, historyChanged, demoForce = () => {} }) {
   let session = null, result = null, plans = [], saving = false;
+  const demo = { held: false, latched: false };
   const form = $('trainingForm');
   const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'wind', 'river'];
   function readPlan() {
@@ -62,6 +63,19 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     $('trainingStop').hidden = !active;
     busyChanged(active);
   }
+  /** Force of the simulated hand: power is a share of the current target, 100% = on target. */
+  function pushDemo() {
+    const pct = Number($('demoPower').value);
+    const pulling = demo.held || demo.latched;
+    const target = session?.targetKg ?? 0;
+    $('demoPowerOut').textContent = `${pct}% celu${target ? ` · ${kg(pct / 100 * target)}` : ''}`;
+    $('demoPull').setAttribute('aria-pressed', String(pulling));
+    $('demoPull').textContent = pulling ? 'Ciągniesz… (DEMO)' : 'Trzymaj, aby ciągnąć (DEMO)';
+    demoForce(session?.demoManual && pulling ? pct / 100 * target : 0);
+  }
+  function resetDemo() {
+    demo.held = false; demo.latched = false; $('demoLatch').checked = false; pushDemo();
+  }
   function start(e) {
     e.preventDefault();
     const c = context();
@@ -74,12 +88,15 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
       session.profileSnapshot = { ...c.profile };
       session.device = c.device;
       session.demo = c.demo;
+      session.demoManual = !!c.manualDemo;
       $('coachResult').hidden = true;
       $('coachLive').hidden = false;
       $('flight').hidden = session.plan.mode !== 'game';
       $('runner').hidden = session.plan.mode !== 'jump';
       $('ship').hidden = session.plan.mode !== 'ship';
-      $('demoJump').hidden = session.plan.mode !== 'jump' || !session.demo;
+      $('demoJump').hidden = session.plan.mode !== 'jump' || !session.demo || session.demoManual;
+      $('demoHand').hidden = !session.demoManual;
+      resetDemo();
       lock(true);
       draw();
       $('coachLive').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -91,6 +108,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
     if (!session.done) session.finish(reason, performance.now());
     result = session;
     session = null;
+    resetDemo(); $('demoHand').hidden = true;
     lock(false);
     $('coachLive').hidden = true;
     $('coachResult').hidden = false;
@@ -138,6 +156,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
       $('coachHint').textContent = !work ? 'Rozluźnij chwyt' : session.demo ? 'Dotknij „Skok” przed przeszkodą' : session.jumpGame.armed ? `Dociągnij do ${kg(session.targetKg)}, żeby skoczyć` : `Odpuść poniżej ${kg(session.targetKg / 2)}, aby przygotować kolejny skok`;
       $('runner').setAttribute('aria-label', $('coachScore').textContent + '. ' + $('coachHint').textContent);
     }
+    if (session.demoManual) pushDemo();
     const bird = $('flightBird');
     bird.style.top = `${Math.max(8, Math.min(92, 100 - session.kg / (session.targetKg * 2) * 100))}%`;
     $('flightBand').style.top = `${50 - session.plan.tolerance / 2}%`;
@@ -169,6 +188,14 @@ export function createCoach({ context, busyChanged, toast, historyChanged }) {
   form.addEventListener('submit', start);
   $('trainingStop').addEventListener('click', () => finish('Zatrzymano ręcznie'));
   $('demoJump').addEventListener('click', () => { if (session?.demo && session.phase.kind === 'work') session.jumpGame?.jump(); });
+  const hold = (on) => { demo.held = on; pushDemo(); };
+  $('demoPull').addEventListener('pointerdown', (e) => { e.preventDefault(); hold(true); try { $('demoPull').setPointerCapture(e.pointerId); } catch { /* finger still tracked by pointerup/cancel */ } });
+  for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) $('demoPull').addEventListener(type, () => hold(false));
+  $('demoPull').addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); if (!e.repeat) hold(true); } });
+  $('demoPull').addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') hold(false); });
+  $('demoPull').addEventListener('contextmenu', (e) => e.preventDefault());
+  $('demoPower').addEventListener('input', pushDemo);
+  $('demoLatch').addEventListener('change', () => { demo.latched = $('demoLatch').checked; pushDemo(); });
   $('planSave').addEventListener('click', savePlan);
   $('savedPlans').addEventListener('change', (e) => { if (e.target.value !== '') fill(plans[Number(e.target.value)]); });
   $('coachSave').addEventListener('click', saveResult);
