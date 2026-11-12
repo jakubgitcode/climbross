@@ -35,3 +35,9 @@ See [Azure setup](docs/AZURE.md) for private containers, CORS, 30-day service SA
 Choose **Trening / Gra → Skoki przez przeszkody**. Pull to the configured kg or percentage target to jump, then release below half the target to rearm. Extra force does not increase jump height. Obstacles cleared, collisions and jumps are saved with the result. In Demo, use **Skok (DEMO)**. Work/rest intervals, signal-loss handling and profile separation apply to both games.
 
 Run `node --test tests/training.test.mjs tests/cloud-jump.test.mjs` for clock, score, jump and cloud-condition tests. Browser tests additionally cover local profile isolation, the original database, malformed imports, cloud conflicts against a mock, and offline use.
+
+## Kayak and tug of war
+
+Choose **Trening / Gra → Spływ kajakiem** to paddle through bends, collecting stars and avoiding rocks. Hands alternate between sets.
+
+Choose **Przeciąganie liny** and an easy, medium or hard rival. Each set is one round: reach the line to win early, or finish the set with the rope on your side. The centre is a draw. Rest pauses the rope, and an interrupted round is not scored. Use either hand or both together; the manual demo board also works.

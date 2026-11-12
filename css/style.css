@@ -190,7 +190,7 @@ canvas#chart { width: 100%; height: 160px; display: block; background: var(--sur
 #phaseBar[data-kind="rest"] #phaseFill, #phaseBar[data-kind="setRest"] #phaseFill { background: var(--phase-rest); }
 #phaseBar[data-kind="ready"] #phaseFill { background: var(--phase-ready); }
 @media (prefers-reduced-motion: reduce) { #phaseFill { transition: none; } }
-#runner, #shipCanvas { display: block; width: 100%; height: 210px; border-radius: 12px; margin: 12px 0; }
+#runner, #shipCanvas, #tugCanvas { display: block; width: 100%; height: 210px; border-radius: 12px; margin: 12px 0; }
 #demoJump { width: 100%; touch-action: manipulation; }
 .demo-hand { display: grid; gap: 8px; margin: 12px 0; padding: 12px; border: 1px dashed var(--line); border-radius: 12px; }
 .demo-hand input[type="range"] { width: 100%; }

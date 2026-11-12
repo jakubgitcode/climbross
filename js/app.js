@@ -336,6 +336,8 @@ function historyItem(m) {
     if (m.training) {
       const t = m.training;
       if (t.game?.type === 'jump') stats.append(` · przeskoczone ${t.game.cleared} · trafione ${t.game.missed}`);
+      if (t.game?.type === 'kayak') stats.append(` · ${t.game.score} pkt · gwiazdki ${t.game.stars}/${t.game.totalStars}${t.game.medal ? ` · medal ${t.game.medal}` : ''}`);
+      if (t.game?.type === 'tug') stats.append(` · ${t.completed ? '' : 'dotychczas: '}${t.game.result} · rundy ${t.game.roundsWon}:${t.game.roundsLost} · remisy ${t.game.roundsDrawn}`);
       if (t.game?.type === 'ship') stats.append(` · uderzenia ${t.game.hits} · lewy ${(t.game.leftThrust * 100).toFixed(0)}% / prawy ${(t.game.rightThrust * 100).toFixed(0)}% celu`);
       stats.append(` · ${t.reason} · cel ${fmt(t.targetKg)} kg · w strefie ${t.zoneS.toFixed(1)} s (${t.accuracy.toFixed(0)}%) · ${t.completedReps}/${t.plan.reps * t.plan.sets} powt. · ★ ${t.points}`);
     }

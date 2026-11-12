@@ -1,6 +1,7 @@
 import { drawRunner } from './jump.js';
 import { drawShip } from './ship.js';
-import { PRESETS, MAX_KEYS, validatePlan, durationMs, resolveTarget, TrainingSession } from './training.js';
+import { drawTug, RIVALS } from './tug.js';
+import { PRESETS, MAX_KEYS, ALTERNATING, validatePlan, durationMs, resolveTarget, TrainingSession } from './training.js';
 import * as store from './store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -13,17 +14,18 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
   let session = null, result = null, plans = [], saving = false;
   const demo = { held: false, latched: false };
   const form = $('trainingForm');
-  const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'wind', 'river'];
+  const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'wind', 'river', 'rival'];
   function readPlan() {
     return validatePlan(Object.fromEntries(fields.map((k) => [k, form.elements[k].value])));
   }
   function fill(plan) {
+    form.elements.rival.value = plan.rival ?? 'medium';
     for (const k of fields) if (plan[k] !== undefined) form.elements[k].value = plan[k];
     preview();
   }
   function preview() {
     if (session) return;
-    const ship = form.elements.mode.value === 'ship';
+    const mode = form.elements.mode.value, ship = ALTERNATING.includes(mode), kayak = mode === 'kayak';
     // The ship alternates hands, so "both together" makes no sense; the chosen hand only starts.
     form.elements.hand.options[2].disabled = ship;
     if (ship && form.elements.hand.value === 'both') form.elements.hand.value = 'left';
@@ -36,12 +38,16 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
       $('planPreview').textContent = ship
         ? `Lewa: cel ${kg(resolveTarget(p, 'left', c.profile))} · prawa: cel ${kg(resolveTarget(p, 'right', c.profile))} · start: ${HAND[hand].toLowerCase()} · ${time(durationMs(p) / 1000)} z odliczaniem`
         : `${HAND[hand]} · cel ${kg(force)} · strefa ${zone(force)} · ${time(durationMs(p) / 1000)} z odliczaniem`;
+      if (p.mode === 'tug') $('planPreview').textContent += ` · ${p.sets} rund · rywal: ${RIVALS[p.rival].label.toLowerCase()}`;
     } catch (e) { $('planPreview').textContent = e.message; }
     $('flightIntro').hidden = form.elements.mode.value !== 'game';
     $('jumpIntro').hidden = form.elements.mode.value !== 'jump';
-    $('shipIntro').hidden = !ship;
-    $('riverRow').hidden = !ship;
-    $('windRow').hidden = !ship || form.elements.river.value === 'bends';
+    $('shipIntro').hidden = mode !== 'ship';
+    $('kayakIntro').hidden = !kayak;
+    $('tugIntro').hidden = mode !== 'tug';
+    $('rivalRow').hidden = mode !== 'tug';
+    $('riverRow').hidden = mode !== 'ship';
+    $('windRow').hidden = mode !== 'ship' || form.elements.river.value === 'bends';
   }
   function listPlans() {
     $('savedPlans').replaceChildren(new Option('Wybierz zapisany plan', ''), ...plans.map((p, i) => new Option(p.name, String(i))));
@@ -93,7 +99,8 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
       $('coachLive').hidden = false;
       $('flight').hidden = session.plan.mode !== 'game';
       $('runner').hidden = session.plan.mode !== 'jump';
-      $('ship').hidden = session.plan.mode !== 'ship';
+      $('ship').hidden = !session.shipGame;
+      $('tug').hidden = !session.tugGame;
       $('demoJump').hidden = session.plan.mode !== 'jump' || !session.demo || session.demoManual;
       $('demoHand').hidden = !session.demoManual;
       resetDemo();
@@ -116,7 +123,9 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
     $('coachResultTitle').textContent = `${s.reason}${result.demo ? ' · DEMO' : ''}`;
     $('coachResultText').textContent = `${HAND[result.hand]} · cel ${kg(s.targetKg)} · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. W strefie ${s.zoneS.toFixed(1)} z ${s.workS.toFixed(1)} s (${s.accuracy.toFixed(0)}%). Szczyt ${kg(result.peakKg)}.${s.plan.mode === 'game' ? ` Zdobyte gwiazdy: ${s.points}.` : ''}`;
     if (s.game?.type === 'jump') $('coachResultText').textContent += ` Przeskoczone: ${s.game.cleared}, trafione: ${s.game.missed}, skoki: ${s.game.jumps}.`;
+    if (s.game?.type === 'kayak') $('coachResultText').textContent = `Spływ kajakiem · ${s.game.medal ? `medal ${s.game.medal} · ` : ''}${s.game.score} pkt. Gwiazdki ${s.game.stars}/${s.game.totalStars}, najdłuższa seria ${s.game.bestStreak}. Skały: ${s.game.rocks}, brzeg: ${s.game.hits - s.game.rocks}. Lewa ręka ${(s.game.leftThrust * 100).toFixed(0)}% celu, prawa ${(s.game.rightThrust * 100).toFixed(0)}% celu (różnica ${s.game.asymmetryPct.toFixed(0)}%). W strefie ${s.accuracy.toFixed(0)}% czasu pracy. Szczyt ${kg(result.peakKg)}.`;
     if (s.game?.type === 'ship') $('coachResultText').textContent = `Okręt · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. Uderzenia w brzeg: ${s.game.hits}. Lewa ręka ${(s.game.leftThrust * 100).toFixed(0)}% celu, prawa ${(s.game.rightThrust * 100).toFixed(0)}% celu (różnica ${s.game.asymmetryPct.toFixed(0)}%). W strefie ${s.accuracy.toFixed(0)}% czasu pracy. Szczyt ${kg(result.peakKg)}.`;
+    if (s.game?.type === 'tug') $('coachResultText').textContent += ` Przeciąganie liny: ${s.completed ? '' : 'dotychczasowy wynik — '}${s.game.result}. Rundy ${s.game.roundsWon}:${s.game.roundsLost}, remisy: ${s.game.roundsDrawn}. Rywal: ${RIVALS[s.game.rival].label.toLowerCase()}. Średnia siła podczas pojedynku: Ty ${(s.game.avgPlayer * 100).toFixed(0)}%, rywal ${(s.game.avgRival * 100).toFixed(0)}% celu.`;
     $('coachSave').disabled = false;
     $('trainingStart').disabled = true;
   }
@@ -130,7 +139,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
     $('phaseBar').dataset.kind = p.kind;
     const fresh = session.lastReading !== null && now - session.lastReading <= 500;
     const inZone = fresh && session.kg >= session.minKg && session.kg <= session.maxKg;
-    const ship = session.plan.mode === 'ship';
+    const ship = !!session.shipGame;
     $('coachPhase').textContent = `${ship && p.kind === 'setRest' ? `Zmiana ręki → ${HAND[p.hand]}` : PHASE[p.kind]}${session.demo ? ' · DEMO' : ''}`;
     $('coachTime').textContent = time(Math.max(0, p.end - now) / 1000);
     $('coachRound').textContent = `${ship ? HAND[p.hand] : HAND[session.hand]} · seria ${p.set}/${session.plan.sets} · powtórzenie ${p.rep}/${session.plan.reps}`;
@@ -146,8 +155,29 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
       drawShip($('shipCanvas'), session.shipGame, work, p.hand);
       $('coachScore').textContent = `★ ${Math.floor(session.zoneMs / 1000)} s w strefie · ⚠ uderzenia ${session.shipGame.hits}`;
       const engine = p.hand === 'left' ? 'lewym' : 'prawym';
+      const g = session.shipGame;
+      if (g.kayak) {
+        const bend = session.power > 1 ? 'ostry' : session.power < 1 ? 'łagodny' : 'średni';
+        const turn = p.hand === 'left' ? 'prawo' : 'lewo';
+        $('coachScore').textContent = `★ ${g.score} pkt · gwiazdki ${g.stars}/${g.totalStars} · combo ×${g.multiplier} · ⚠ ${g.hits}`;
+        $('coachHint').textContent = work
+          ? (!fresh ? 'Czekam na dane…' : `Zakręt ${bend} w ${turn} · ${Math.round(session.kg / session.targetKg * 100)}% celu`)
+          : `${p.kind === 'rest' ? 'Odpocznij' : p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : `Zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką`} · następny zakręt ${bend}: ${kg(session.targetKg)}`;
+      } else
       $('coachHint').textContent = !work ? (p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : p.kind === 'ready' ? `Przygotuj się: zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką` : 'Puść i odpocznij') : !fresh ? 'Czekam na dane…' : `Napędzasz ${engine} silnikiem, okręt skręca w ${engine === 'lewym' ? 'prawo' : 'lewo'} · ${Math.round(session.kg / session.targetKg * 100)}% celu`;
       $('shipCanvas').setAttribute('aria-label', `${$('coachScore').textContent}. ${$('coachHint').textContent}`);
+    }
+    if (session.tugGame) {
+      const g = session.tugGame;
+      drawTug($('tugCanvas'), g, work, p.hand);
+      $('coachScore').textContent = `Rundy: Ty ${g.roundsWon} : ${g.roundsLost} rywal · remisy ${g.roundsDrawn} · ${g.roundsWon} pkt`;
+      $('coachHint').textContent = !work ? 'Puść i odpocznij — lina stoi' : g.roundResult
+        ? `Runda: ${g.roundResult}. Do końca pracy utrzymuj siłę w strefie celu.`
+        : !fresh ? 'Czekam na dane…' : g.warning ? 'Za sekundę rywal szarpnie — utrzymaj chwyt!'
+        : g.rivalState === 'surge' ? 'Rywal szarpie — utrzymaj chwyt!'
+        : g.rivalState === 'fatigue' ? 'Rywal łapie oddech — trzymaj siłę w celu'
+        : inZone ? 'Utrzymaj tę siłę — przeciągasz linę' : session.kg > session.maxKg ? 'Zmniejsz siłę do strefy celu' : 'Zwiększ siłę do celu';
+      $('tugCanvas').setAttribute('aria-label', `${$('coachScore').textContent}. ${$('coachHint').textContent}`);
     }
     if (session.jumpGame) {
       drawRunner($('runner'), session.jumpGame, work);

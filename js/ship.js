@@ -7,6 +7,9 @@
 // Pulling anywhere inside the tolerance zone counts as exactly on target, so staying in the
 // zone is enough to hold the course.
 export const HALF_WIDTH = 0.9;   // channel half-width, in distance units
+export const KAYAK_HALF_WIDTH = 0.55;
+// A kayak turns twice as hard as the ship and the current recentres it faster, so mistakes show sooner and heal sooner.
+export const KAYAK_THETA = 0.13, KAYAK_RESTORE = 0.15;
 export const BEND_HALF_WIDTH = 0.5; // a river with bends is narrower, or leaving its path would go unpunished
 const V_MAX = 1.5;               // units/s, constant: the plan's phases always line up with the river
 const THETA_MAX = 0.065;          // rad of yaw at thrust 1
@@ -18,6 +21,14 @@ const TAU_YAW = 0.5;              // s, how quickly the heading follows the engi
 const TRAIL_STEP = 0.08;
 const TRAIL_LENGTH = 90;
 const SIM_STEP_MS = 50;
+// Kayak run: stars lie on the ideal line, rocks beside it.
+const STAR_FIRST = 1.5;           // distance into a work section before the first star (1 s to get going)
+const STAR_STEP = 0.75;           // one star every half second
+const STAR_REACH = 0.14;          // how far from the line a star is still picked up
+const ROCK_OFFSET = 0.36, ROCK_REACH = 0.11;
+const COMBO_STEP = 3, COMBO_MAX = 5;
+
+const hash = (i, j) => { const v = Math.sin(i * 12.9898 + j * 78.233) * 43758.5453; return v - Math.floor(v); };
 
 // Sideways drift of one steady work + rest cycle of an on-target pull; 100% wind cancels it.
 function cycleDrift(workS, restS) {
@@ -36,7 +47,11 @@ export class ShipGame {
    * rough water where the plan says "work", calm water for the rest, and with `bends` a
    * river that turns away from the working hand's engine (left hand: bend to the right) for exactly as long as it works.
    */
-  constructor({ wind = 0, workS = 1, restS = 0, tolerance = 0, bends = false, schedule = null, walls = true, trail = true, halfWidth = HALF_WIDTH, restore = RESTORE } = {}) {
+  constructor({ wind = 0, workS = 1, restS = 0, tolerance = 0, bends = false, schedule = null, walls = true, trail = true, halfWidth = HALF_WIDTH, restore = RESTORE, kayak = false, theta = THETA_MAX } = {}) {
+    this.theta = theta;
+    this.kayak = kayak;
+    this.items = []; this.nextItem = 0; this.pops = [];
+    this.stars = 0; this.totalStars = 0; this.score = 0; this.streak = 0; this.bestStreak = 0; this.rocks = 0;
     this.restore = restore;
     this.halfWidth = halfWidth;
     this.wind = Number.isFinite(wind) && wind > 0 ? wind : 0;
@@ -54,20 +69,53 @@ export class ShipGame {
   }
   // Runs an ideal on-target session once to learn where each phase falls along the river.
   #lay(schedule, bends) {
-    const ideal = new ShipGame({ tolerance: this.tolerance, walls: false, trail: false, restore: 0 });
+    const ideal = new ShipGame({ tolerance: this.tolerance, walls: false, trail: false, restore: 0, theta: this.theta });
     ideal.wind = this.wind; ideal.windSpeed = this.windSpeed;
     const path = [[0, 0]];
-    for (const { kind, ms, hand } of schedule) {
+    for (const { kind, ms, hand, power = 1 } of schedule) {
       ideal.setPhase(kind, hand);
       const d0 = ideal.distance;
       for (let left = ms; left > 0; left -= SIM_STEP_MS) {
         const dt = Math.min(SIM_STEP_MS, left);
-        if (kind === 'work') ideal.advance(dt, 1, hand, 1); else ideal.coast(dt);
+        if (kind === 'work') ideal.advance(dt, power, hand, 1, power); else ideal.coast(dt);
         if (bends) path.push([ideal.distance, ideal.y]);
       }
-      this.sections.push({ kind, hand, d0, d1: ideal.distance });
+      this.sections.push({ kind, hand, power, d0, d1: ideal.distance });
     }
     this.path = bends ? path : null;
+    if (this.kayak) this.#scatter();
+  }
+  // Stars on the ideal line of every work section, with a rock between each pair, to one side.
+  #scatter() {
+    this.sections.forEach((s, n) => {
+      if (s.kind !== 'work') return;
+      for (let d = s.d0 + STAR_FIRST, i = 0; d <= s.d1 - 0.2; d += STAR_STEP, i++) {
+        this.items.push({ type: 'star', d, off: 0, state: 'ahead' });
+        const side = hash(n, i) < 0.5 ? -1 : 1;
+        if (d + STAR_STEP / 2 <= s.d1 - 0.2) this.items.push({ type: 'rock', d: d + STAR_STEP / 2, off: side * ROCK_OFFSET, state: 'ahead' });
+      }
+    });
+    this.totalStars = this.items.filter((i) => i.type === 'star').length;
+  }
+  /** Points for the next star: every COMBO_STEP stars in a row add one, up to COMBO_MAX. */
+  get multiplier() { return Math.min(COMBO_MAX, 1 + Math.floor(this.streak / COMBO_STEP)); }
+  #pass() {
+    while (this.nextItem < this.items.length && this.items[this.nextItem].d <= this.distance) {
+      const item = this.items[this.nextItem++];
+      const gap = Math.abs(this.y - (this.centre(item.d) + item.off));
+      if (item.type === 'star') {
+        if (gap <= STAR_REACH) {
+          const gain = this.multiplier;
+          item.state = 'taken'; this.stars++; this.score += gain; this.streak++;
+          this.bestStreak = Math.max(this.bestStreak, this.streak);
+          this.pops.push({ d: item.d, y: this.y, text: `+${gain}` });
+        } else { item.state = 'missed'; this.streak = 0; }
+      } else if (gap <= ROCK_REACH) {
+        item.state = 'hit'; this.rocks++; this.hits++; this.streak = 0;
+        this.pops.push({ d: item.d, y: this.y, text: '✖' });
+      } else item.state = 'passed';
+      if (this.pops.length > 6) this.pops.shift();
+    }
   }
   /** Where the middle of the river is at `d`; it only moves in a river with bends. */
   centre(d) {
@@ -96,14 +144,16 @@ export class ShipGame {
     this.windDir = kind === 'work' || kind === 'rest' ? (hand === 'left' ? -1 : 1) : 0;
   }
   /** Force is applied for `ms` by `hand` against that hand's target. */
-  advance(ms, kg, hand, targetKg) {
+  advance(ms, kg, hand, targetKg, power = 1) {
     if (!Number.isFinite(ms) || ms <= 0 || !Number.isFinite(kg) || !(targetKg > 0) || !(hand in this.engine)) return;
-    const ratio = Math.max(0, kg / targetKg), tol = this.tolerance;
+    if (!(power > 0)) power = 1;
+    // `power` scales this phase's target: a sharper bend asks for a stronger pull and turns harder.
+    const ratio = Math.max(0, kg / (targetKg * power)), tol = this.tolerance;
     // Inside the zone the engine counts as exactly on target; outside it the effect resumes smoothly.
     const effective = Math.abs(ratio - 1) <= tol ? 1 : ratio < 1 ? ratio / (1 - tol) : ratio - tol;
     const e = this.engine[hand];
     e.thrustMs += Math.min(MAX_THRUST, ratio) * ms; e.ms += ms;
-    this.#run(ms, Math.min(MAX_THRUST, effective), hand === 'left' ? 1 : -1);
+    this.#run(ms, Math.min(MAX_THRUST, effective) * power, hand === 'left' ? 1 : -1);
   }
   /** Rest, preparation, or a stale sensor: the ship keeps gliding. */
   coast(ms) {
@@ -114,18 +164,19 @@ export class ShipGame {
     for (let left = ms; left > 0;) {
       const dt = Math.min(10, left); left -= dt;
       const s = dt / 1000;
-      this.heading += (side * thrust * THETA_MAX - this.heading) * (1 - Math.exp(-s / TAU_YAW));
+      this.heading += (side * thrust * this.theta - this.heading) * (1 - Math.exp(-s / TAU_YAW));
       const middle = this.centre(this.distance);
       this.y += (this.speed * Math.sin(this.heading) + this.windDir * this.windSpeed - this.restore * (this.y - middle)) * s;
       this.distance += this.speed * s;
       if (this.walls) {
         const off = this.y - this.centre(this.distance);
         if (Math.abs(off) > this.halfWidth) {
-          if (!this.touching) { this.touching = true; this.hits++; }
+          if (!this.touching) { this.touching = true; this.hits++; this.streak = 0; }
           if (Math.sign(this.heading) === Math.sign(off)) this.heading = 0;
           this.y = this.centre(this.distance) + Math.sign(off) * this.halfWidth;
         } else if (Math.abs(off) < this.halfWidth * 0.8) this.touching = false;
       }
+      if (this.items.length) this.#pass();
       if (this.keepTrail) {
         const last = this.trail.at(-1);
         if (!last || this.distance - last[0] >= TRAIL_STEP) {
@@ -140,8 +191,13 @@ export class ShipGame {
   summary() {
     const left = this.average('left'), right = this.average('right');
     const stronger = Math.max(left, right);
+    const share = this.totalStars ? this.stars / this.totalStars : 0;
     return {
-      type: 'ship', distance: this.distance, hits: this.hits, wind: this.wind, bends: !!this.path,
+      ...(this.kayak ? {
+        stars: this.stars, totalStars: this.totalStars, score: this.score, bestStreak: this.bestStreak, rocks: this.rocks,
+        medal: share >= 0.9 ? 'złoty' : share >= 0.7 ? 'srebrny' : share >= 0.5 ? 'brązowy' : '',
+      } : {}),
+      type: this.kayak ? 'kayak' : 'ship', distance: this.distance, hits: this.hits, wind: this.wind, bends: !!this.path,
       leftThrust: left, rightThrust: right,
       asymmetryPct: stronger > 0 ? Math.abs(left - right) / stronger * 100 : 0,
     };
@@ -152,7 +208,6 @@ const PX = 55;       // pixels per distance unit across the river
 const XPX = 40;      // and along it, so about one work + rest cycle is in view
 const SHIP_X = 90;
 const MID = 105;
-const hash = (i, j) => { const v = Math.sin(i * 12.9898 + j * 78.233) * 43758.5453; return v - Math.floor(v); };
 const WORK_COLOUR = '#ff6b6b', REST_COLOUR = '#69db7c';
 
 export function drawShip(canvas, game, working, hand) {
@@ -242,8 +297,43 @@ export function drawShip(canvas, game, working, hand) {
     c.fillStyle = colour;
     c.beginPath(); c.arc(x, m - hw - 2, 5, 0, 7); c.arc(x, m + hw + 2, 5, 0, 7); c.fill();
   });
+  if (game.kayak) {
+    for (const item of game.items) {
+      const x = worldX(item.d);
+      if (x < -12 || x > 432 || item.state === 'taken') continue;
+      const y = middleY(x) + item.off * PX;
+      if (item.type === 'star') {
+        const pulse = 1 + 0.15 * Math.sin(t * 6 + item.d * 3);
+        c.globalAlpha = item.state === 'missed' ? 0.25 : 1;
+        c.fillStyle = '#ffd43b'; c.beginPath();
+        for (let k = 0; k < 10; k++) { const r = (k % 2 ? 3 : 7) * pulse, a = -Math.PI / 2 + k * Math.PI / 5; c.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
+        c.closePath(); c.fill(); c.globalAlpha = 1;
+      } else {
+        c.fillStyle = item.state === 'hit' ? '#ff6b6b' : '#8a97a3'; c.beginPath(); c.ellipse(x, y, 8, 6, 0.4, 0, 7); c.fill();
+        c.fillStyle = '#ffffff40'; c.beginPath(); c.ellipse(x - 2, y - 2, 3, 2, 0.4, 0, 7); c.fill();
+      }
+    }
+    c.font = 'bold 15px system-ui'; c.textAlign = 'center';
+    for (const pop of game.pops) {
+      const age = (dist - pop.d) / 1.2;
+      if (age < 0 || age > 1) continue;
+      c.fillStyle = pop.text === '✖' ? `rgba(255,107,107,${1 - age})` : `rgba(255,212,59,${1 - age})`;
+      c.fillText(pop.text, worldX(pop.d) + 6, MID + (pop.y - cam) * PX - 12 - age * 18);
+    }
+    c.textAlign = 'left';
+  }
   // Ship, pointing right. The left engine is the upper one; driving it turns the ship down (right).
-  c.save(); c.translate(SHIP_X, MID + (game.y - cam) * PX); c.rotate(game.heading * 1.4);
+  c.save(); c.translate(SHIP_X, MID + (game.y - cam) * PX); c.rotate(game.heading * (game.kayak ? 1 : 1.4));
+  if (game.kayak) {
+    // Kayak: the paddle dips on the side of the working hand (left hand = upper side).
+    c.fillStyle = '#ffa94d'; c.beginPath(); c.ellipse(0, 0, 24, 7, 0, 0, 7); c.fill();
+    c.fillStyle = '#0c2740'; c.beginPath(); c.ellipse(-2, 0, 7, 4, 0, 0, 7); c.fill();
+    c.fillStyle = '#ffe3bf'; c.beginPath(); c.arc(-2, 0, 3, 0, 7); c.fill();
+    const dip = working ? (hand === 'left' ? -1 : 1) : 0, swing = working && !still ? Math.sin(t * 9) * 3 : 0;
+    c.strokeStyle = '#e9ecef'; c.lineWidth = 2; c.beginPath(); c.moveTo(-2 + swing, -15 + dip * 3); c.lineTo(-2 - swing, 15 + dip * 3); c.stroke();
+    c.fillStyle = working ? '#ffcd75' : '#adb5bd';
+    for (const side of [-1, 1]) { c.beginPath(); c.ellipse(-2 - side * swing, side * 15 + dip * 3, 3, 5, 0, 0, 7); c.fill(); }
+  } else {
   c.fillStyle = '#7be6e5'; c.beginPath(); c.moveTo(24, 0); c.lineTo(-16, -11); c.lineTo(-16, 11); c.closePath(); c.fill();
   c.fillStyle = '#0c2740'; c.fillRect(-4, -4, 12, 8);
   for (const [side, y] of [['left', -9], ['right', 9]]) {
@@ -251,9 +341,14 @@ export function drawShip(canvas, game, working, hand) {
     c.fillStyle = active ? '#ffcd75' : '#41586a'; c.fillRect(-22, y - 3, 8, 6);
     if (active) { c.fillStyle = '#ff9a3c'; c.beginPath(); c.moveTo(-22, y - 3); c.lineTo(-34 - (still ? 3 : Math.random() * 6), y); c.lineTo(-22, y + 3); c.fill(); }
   }
+  }
   c.restore();
   c.font = 'bold 16px system-ui'; c.fillStyle = '#fff';
-  c.fillText(`⚠ ${game.hits}`, 16, 24);
+  if (game.kayak) {
+    c.fillStyle = '#ffd43b'; c.fillText(`★ ${game.score}`, 16, 24);
+    c.fillStyle = '#fff'; c.fillText(`⚠ ${game.hits}`, 90, 24);
+    if (game.multiplier > 1) { c.textAlign = 'right'; c.fillStyle = '#ffd43b'; c.font = 'bold 20px system-ui'; c.fillText(`combo ×${game.multiplier}`, 404, 26); c.textAlign = 'left'; }
+  } else c.fillText(`⚠ ${game.hits}`, 16, 24);
   if (game.wind > 0) {
     c.font = '14px system-ui'; c.textAlign = 'right'; c.fillStyle = '#d3eaff';
     c.fillText(game.windDir ? `Wiatr ${Math.round(game.wind * 100)}% ${game.windDir < 0 ? '▲' : '▼'}` : 'Wiatr: cisza', 404, 24);
