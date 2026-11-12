@@ -1,7 +1,9 @@
+import { drawScale } from './scale.js';
+import { drawClimb } from './climb.js';
 import { drawRunner } from './jump.js';
 import { drawShip } from './ship.js';
 import { drawTug, RIVALS } from './tug.js';
-import { PRESETS, MAX_KEYS, ALTERNATING, validatePlan, durationMs, resolveTarget, TrainingSession } from './training.js';
+import { PRESETS, MAX_KEYS, ALTERNATING, validatePlan, durationMs, resolveTarget, findGhost, TrainingSession } from './training.js';
 import * as store from './store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -11,21 +13,40 @@ const kg = (v) => `${v.toFixed(1)} kg`;
 const time = (s) => { const n = Math.ceil(s); return `${Math.floor(n / 60)}:${String(n % 60).padStart(2, '0')}`; };
 
 export function createCoach({ context, busyChanged, toast, historyChanged, demoForce = () => {} }) {
-  let session = null, result = null, plans = [], saving = false;
+  let session = null, result = null, plans = [], saving = false, starting = false;
   const demo = { held: false, latched: false };
+  let audio = null, previousPhase = null, previousScore = 0;
+  const sound = $('coachSound'), vibration = $('coachVibration');
+  try { sound.checked = localStorage.getItem('coachSound') === '1'; vibration.checked = localStorage.getItem('coachVibration') === '1'; } catch { /* settings remain off */ }
+  for (const [box, key] of [[sound, 'coachSound'], [vibration, 'coachVibration']]) box.addEventListener('change', () => {
+    try { localStorage.setItem(key, box.checked ? '1' : '0'); } catch { /* optional preference */ }
+    if (box === sound && box.checked) try { const C = globalThis.AudioContext || globalThis.webkitAudioContext; if (C) { audio ||= new C(); audio.resume(); } } catch { /* sound unavailable */ }
+  });
+  function cue() {
+    if (vibration.checked) try { navigator.vibrate?.(60); } catch { /* unsupported */ }
+    if (sound.checked && audio?.state === 'running') try {
+      const oscillator = audio.createOscillator(), gain = audio.createGain();
+      oscillator.frequency.value = 660; gain.gain.setValueAtTime(.04, audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001, audio.currentTime + .12);
+      oscillator.connect(gain); gain.connect(audio.destination); oscillator.start(); oscillator.stop(audio.currentTime + .12);
+    } catch { /* sound unavailable */ }
+  }
   const form = $('trainingForm');
-  const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'wind', 'river', 'rival'];
+  const fields = ['hand', 'name', 'mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'wind', 'river', 'rival', 'handMode'];
   function readPlan() {
-    return validatePlan(Object.fromEntries(fields.map((k) => [k, form.elements[k].value])));
+    const input = Object.fromEntries(fields.map((k) => [k, form.elements[k].value]));
+    if (input.mode === 'climb') input.handMode = form.elements.climbHandMode.value;
+    return validatePlan(input);
   }
   function fill(plan) {
     form.elements.rival.value = plan.rival ?? 'medium';
+    form.elements.handMode.value = plan.mode === 'tug' ? plan.handMode ?? 'single' : 'single';
+    form.elements.climbHandMode.value = plan.mode === 'climb' ? plan.handMode ?? 'set' : 'set';
     for (const k of fields) if (plan[k] !== undefined) form.elements[k].value = plan[k];
     preview();
   }
   function preview() {
     if (session) return;
-    const mode = form.elements.mode.value, ship = ALTERNATING.includes(mode), kayak = mode === 'kayak';
+    const mode = form.elements.mode.value, ship = ALTERNATING.includes(mode) || mode === 'climb' || mode === 'scale' || (mode === 'tug' && form.elements.handMode.value === 'alternating'), kayak = mode === 'kayak';
     // The ship alternates hands, so "both together" makes no sense; the chosen hand only starts.
     form.elements.hand.options[2].disabled = ship;
     if (ship && form.elements.hand.value === 'both') form.elements.hand.value = 'left';
@@ -45,7 +66,11 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
     $('shipIntro').hidden = mode !== 'ship';
     $('kayakIntro').hidden = !kayak;
     $('tugIntro').hidden = mode !== 'tug';
+    $('climbIntro').hidden = mode !== 'climb';
+    $('scaleIntro').hidden = mode !== 'scale';
+    $('climbHandsRow').hidden = mode !== 'climb';
     $('rivalRow').hidden = mode !== 'tug';
+    $('tugHandsRow').hidden = mode !== 'tug';
     $('riverRow').hidden = mode !== 'ship';
     $('windRow').hidden = mode !== 'ship' || form.elements.river.value === 'bends';
   }
@@ -82,15 +107,18 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
   function resetDemo() {
     demo.held = false; demo.latched = false; $('demoLatch').checked = false; pushDemo();
   }
-  function start(e) {
+  async function start(e) {
     e.preventDefault();
     const c = context();
     if (c.busy) { toast('Poczekaj na zakończenie operacji profilu.'); return; }
     if (!c.connected) { toast('Najpierw połącz deskę lub włącz Demo.'); return; }
     if (c.recording || c.pendingResult || result) { toast('Najpierw zapisz lub odrzuć poprzedni wynik.'); return; }
-    if (session) return;
+    if (session || starting) return;
+    starting = true;
     try {
-      session = new TrainingSession(readPlan(), form.elements.hand.value, c.profile, performance.now());
+      const plan = readPlan(), hand = form.elements.hand.value;
+      const ghost = plan.mode === 'tug' && plan.rival === 'ghost' ? findGhost(await store.listMeasurements(), plan, hand) : null;
+      session = new TrainingSession(plan, hand, c.profile, performance.now(), ghost);
       session.profileSnapshot = { ...c.profile };
       session.device = c.device;
       session.demo = c.demo;
@@ -101,13 +129,17 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
       $('runner').hidden = session.plan.mode !== 'jump';
       $('ship').hidden = !session.shipGame;
       $('tug').hidden = !session.tugGame;
+      $('climbCanvas').hidden = !session.climbGame;
+      $('scaleCanvas').hidden = !session.scaleGame;
       $('demoJump').hidden = session.plan.mode !== 'jump' || !session.demo || session.demoManual;
       $('demoHand').hidden = !session.demoManual;
-      resetDemo();
+      resetDemo(); previousPhase = null; previousScore = 0;
+      if (sound.checked) try { const C = globalThis.AudioContext || globalThis.webkitAudioContext; if (C) { audio ||= new C(); audio.resume(); } } catch { /* optional */ }
       lock(true);
       draw();
       $('coachLive').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     } catch (e) { session = null; toast(e.message); }
+    finally { starting = false; }
   }
   function finish(reason) {
     if (!session) return;
@@ -122,6 +154,8 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
     const s = result.summary();
     $('coachResultTitle').textContent = `${s.reason}${result.demo ? ' · DEMO' : ''}`;
     $('coachResultText').textContent = `${HAND[result.hand]} · cel ${kg(s.targetKg)} · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. W strefie ${s.zoneS.toFixed(1)} z ${s.workS.toFixed(1)} s (${s.accuracy.toFixed(0)}%). Szczyt ${kg(result.peakKg)}.${s.plan.mode === 'game' ? ` Zdobyte gwiazdy: ${s.points}.` : ''}`;
+    if (s.game?.type === 'scale') $('coachResultText').textContent += ` Szalka: zważone ${s.game.weighed}, zgodność rąk ${s.game.symmetry === null ? 'brak porównania' : `${s.game.symmetry.toFixed(0)}%`}.`;
+    if (s.game?.type === 'climb') $('coachResultText').textContent += ` Wspinaczka: wysokość ${s.game.height}, czyste chwyty ${s.game.clean}, loty ${s.game.falls}.`;
     if (s.game?.type === 'jump') $('coachResultText').textContent += ` Przeskoczone: ${s.game.cleared}, trafione: ${s.game.missed}, skoki: ${s.game.jumps}.`;
     if (s.game?.type === 'kayak') $('coachResultText').textContent = `Spływ kajakiem · ${s.game.medal ? `medal ${s.game.medal} · ` : ''}${s.game.score} pkt. Gwiazdki ${s.game.stars}/${s.game.totalStars}, najdłuższa seria ${s.game.bestStreak}. Skały: ${s.game.rocks}, brzeg: ${s.game.hits - s.game.rocks}. Lewa ręka ${(s.game.leftThrust * 100).toFixed(0)}% celu, prawa ${(s.game.rightThrust * 100).toFixed(0)}% celu (różnica ${s.game.asymmetryPct.toFixed(0)}%). W strefie ${s.accuracy.toFixed(0)}% czasu pracy. Szczyt ${kg(result.peakKg)}.`;
     if (s.game?.type === 'ship') $('coachResultText').textContent = `Okręt · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. Uderzenia w brzeg: ${s.game.hits}. Lewa ręka ${(s.game.leftThrust * 100).toFixed(0)}% celu, prawa ${(s.game.rightThrust * 100).toFixed(0)}% celu (różnica ${s.game.asymmetryPct.toFixed(0)}%). W strefie ${s.accuracy.toFixed(0)}% czasu pracy. Szczyt ${kg(result.peakKg)}.`;
@@ -133,13 +167,18 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
     if (!session) return;
     const now = performance.now();
     session.tick(now);
-    if (session.done) { finish(session.reason); return; }
+    if (session.done) { cue(); finish(session.reason); return; }
     const p = session.phase, work = p.kind === 'work';
+    if (previousPhase !== null && previousPhase !== session.phaseIndex) cue();
+    previousPhase = session.phaseIndex;
+    const eventScore = session.climbGame?.clean ?? session.scaleGame?.weighed ?? session.shipGame?.score ?? session.tugGame?.roundsWon ?? session.jumpGame?.cleared ?? 0;
+    if (eventScore > previousScore) cue();
+    previousScore = eventScore;
     $('phaseFill').style.width = `${Math.max(0, Math.min(1, (p.end - now) / p.ms)) * 100}%`;
     $('phaseBar').dataset.kind = p.kind;
     const fresh = session.lastReading !== null && now - session.lastReading <= 500;
     const inZone = fresh && session.kg >= session.minKg && session.kg <= session.maxKg;
-    const ship = !!session.shipGame;
+    const ship = !!session.shipGame || !!session.climbGame || !!session.scaleGame || session.plan.handMode === 'alternating';
     $('coachPhase').textContent = `${ship && p.kind === 'setRest' ? `Zmiana ręki → ${HAND[p.hand]}` : PHASE[p.kind]}${session.demo ? ' · DEMO' : ''}`;
     $('coachTime').textContent = time(Math.max(0, p.end - now) / 1000);
     $('coachRound').textContent = `${ship ? HAND[p.hand] : HAND[session.hand]} · seria ${p.set}/${session.plan.sets} · powtórzenie ${p.rep}/${session.plan.reps}`;
@@ -167,6 +206,18 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
       $('coachHint').textContent = !work ? (p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : p.kind === 'ready' ? `Przygotuj się: zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką` : 'Puść i odpocznij') : !fresh ? 'Czekam na dane…' : `Napędzasz ${engine} silnikiem, okręt skręca w ${engine === 'lewym' ? 'prawo' : 'lewo'} · ${Math.round(session.kg / session.targetKg * 100)}% celu`;
       $('shipCanvas').setAttribute('aria-label', `${$('coachScore').textContent}. ${$('coachHint').textContent}`);
     }
+    if (session.scaleGame) {
+      drawScale($('scaleCanvas'), session.scaleGame);
+      $('coachScore').textContent = `Zważone: ${session.scaleGame.weighed}`;
+      $('scaleCanvas').setAttribute('aria-label', $('coachScore').textContent + '. ' + $('coachHint').textContent);
+    }
+    if (session.climbGame) {
+      drawClimb($('climbCanvas'), session.climbGame, p.hand);
+      $('coachScore').textContent = `Chwyty ${session.climbGame.clean} · loty ${session.climbGame.falls} · wysokość ${session.climbGame.height}`;
+      const next = session.phases.slice(session.phaseIndex + 1).find(x => x.kind === 'work');
+      if (next) $('coachHint').textContent += ` · następny chwyt: ${HAND[next.hand].toLowerCase()}, ${kg(session.targets[next.hand] * next.power)}`;
+      $('climbCanvas').setAttribute('aria-label', $('coachScore').textContent + '. ' + $('coachHint').textContent);
+    }
     if (session.tugGame) {
       const g = session.tugGame;
       drawTug($('tugCanvas'), g, work, p.hand);
@@ -183,7 +234,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
       drawRunner($('runner'), session.jumpGame, work);
       $('demoJump').disabled = !work;
       $('coachScore').textContent = `★ ${session.jumpGame.cleared} przeskoczonych · × ${session.jumpGame.missed} trafionych`;
-      $('coachHint').textContent = !work ? 'Rozluźnij chwyt' : session.demo ? 'Dotknij „Skok” przed przeszkodą' : session.jumpGame.armed ? `Dociągnij do ${kg(session.targetKg)}, żeby skoczyć` : `Odpuść poniżej ${kg(session.targetKg / 2)}, aby przygotować kolejny skok`;
+      $('coachHint').textContent = !work ? 'Rozluźnij chwyt' : session.demo && !session.demoManual ? 'Dotknij „Skok” przed przeszkodą' : session.jumpGame.armed ? `Dociągnij do ${kg(session.targetKg)}, żeby skoczyć` : `Odpuść poniżej ${kg(session.targetKg / 2)}, aby przygotować kolejny skok`;
       $('runner').setAttribute('aria-label', $('coachScore').textContent + '. ' + $('coachHint').textContent);
     }
     if (session.demoManual) pushDemo();
@@ -205,7 +256,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
         peakKg: r.peakKg, avgKg: r.measuredMs ? r.forceIntegral / r.measuredMs : 0,
         tulS: r.loadMs / 1000, durationS: (r.ended - r.started) / 1000,
         bodyWeightKg: r.profileSnapshot.weightKg || 0,
-        maxBeforeKg: (r.shipGame ? Math.max(r.profileSnapshot.maxLeftKg || 0, r.profileSnapshot.maxRightKg || 0) : r.profileSnapshot[MAX_KEYS[r.hand]]) || 0,
+        maxBeforeKg: (r.shipGame || r.climbGame || r.scaleGame || r.plan.handMode === 'alternating' ? Math.max(r.profileSnapshot.maxLeftKg || 0, r.profileSnapshot.maxRightKg || 0) : r.profileSnapshot[MAX_KEYS[r.hand]]) || 0,
         device: r.device, samples: r.samples, hold: '', demo: r.demo, training: r.summary(),
       });
       result = null; $('coachResult').hidden = true; $('trainingStart').disabled = false;

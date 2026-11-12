@@ -3,14 +3,16 @@ export const RIVALS = {
   easy: { label: 'Łatwy', force: 0.8 },
   medium: { label: 'Średni', force: 0.9 },
   hard: { label: 'Trudny', force: 1 },
+  ghost: { label: 'Cień', force: 0 },
 };
 const PULL_RATE = 0.65; // rope units per second per target-force difference
 const CYCLE_MS = 8000;
 const hash = (set, rep) => (Math.imul(set, 73856093) ^ Math.imul(rep, 19349663)) >>> 0;
 
 export class TugGame {
-  constructor({ rival = 'medium', tolerance = 0, sets = 1 } = {}) {
+  constructor({ rival = 'medium', tolerance = 0, sets = 1, ghost = null } = {}) {
     this.rival = Object.hasOwn(RIVALS, rival) ? rival : 'medium';
+    this.ghost = ghost || [];
     this.tolerance = Number.isFinite(tolerance) ? Math.max(0, Math.min(.5, tolerance)) : 0;
     this.sets = sets;
     this.x = 0; this.finalX = 0; this.round = 0; this.roundResult = null;
@@ -30,6 +32,15 @@ export class TugGame {
   // Events use integer milliseconds, with integration split exactly at each transition.
   // A surge and an equally long recovery balance around the selected difficulty.
   eventAt(ms) {
+    if (this.rival === 'ghost') {
+      const t = (this.phase.offset || 0) + ms;
+      let lo = 0, hi = this.ghost.length;
+      while (lo < hi) { const mid = (lo + hi) >> 1; if (this.ghost[mid][0] <= t) lo = mid + 1; else hi = mid; }
+      const sample = this.ghost[lo - 1], next = this.ghost[lo]?.[0] ?? Infinity;
+      const fresh = sample && t < sample[0] + 250;
+      const boundary = Math.min(next, fresh ? sample[0] + 250 : Infinity);
+      return { force: fresh ? Math.min(1.5, Math.max(0, sample[1])) : 0, state: 'ghost', next: boundary - (this.phase.offset || 0) };
+    }
     const base = RIVALS[this.rival].force;
     const seed = hash(this.phase.set, this.phase.rep);
     const cycle = Math.floor(ms / CYCLE_MS) * CYCLE_MS;

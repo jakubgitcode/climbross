@@ -41,3 +41,7 @@ Run `node --test tests/training.test.mjs tests/cloud-jump.test.mjs` for clock, s
 Choose **Trening / Gra → Spływ kajakiem** to paddle through bends, collecting stars and avoiding rocks. Hands alternate between sets.
 
 Choose **Przeciąganie liny** and an easy, medium or hard rival. Each set is one round: reach the line to win early, or finish the set with the rope on your side. The centre is a draw. Rest pauses the rope, and an interrupted round is not scored. Use either hand or both together; the manual demo board also works.
+
+## Climbing and balance
+
+Choose **Wspinaczka** to reach holds by keeping force in the target zone. Hands alternate per set or repetition. Choose **Szalka** to balance a target for two seconds and compare the second hand against the first. Records are kept by game and plan; demo and interrupted sessions are excluded. Optional sound and vibration are off by default.

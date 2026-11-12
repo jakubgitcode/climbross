@@ -80,13 +80,15 @@
             <button type="button" class="btn" data-preset="ship">⚓ Okręt z dwoma silnikami</button>
             <button type="button" class="btn" data-preset="shipBends">⚓ Okręt: zakręty rzeki</button>
             <button type="button" class="btn" data-preset="kayak">🛶 Spływ kajakiem</button>
+            <button type="button" class="btn" data-preset="scale">Szalka</button>
+            <button type="button" class="btn" data-preset="climb">Wspinaczka</button>
             <button type="button" class="btn" data-preset="tug">Przeciąganie liny</button>
           </div>
           <p class="hint">Presety to edytowalne przykłady. Cel % oznacza procent siły maksymalnej zapisanej w profilu dla wybranej ręki.</p>
           <label>Zapisane plany <select id="savedPlans"><option value="">Wybierz zapisany plan</option></select></label>
           <label>Nazwa planu <input name="name" maxlength="60" required></label>
           <div class="training-grid">
-            <label>Tryb <select name="mode"><option value="training">Trening</option><option value="game">Gra: lot przez kanion</option><option value="jump">Gra: skoki przez przeszkody</option><option value="kayak">Gra: spływ kajakiem</option><option value="ship">Gra: okręt z dwoma silnikami</option><option value="tug">Gra: przeciąganie liny</option></select></label>
+            <label>Tryb <select name="mode"><option value="training">Trening</option><option value="game">Gra: lot przez kanion</option><option value="jump">Gra: skoki przez przeszkody</option><option value="kayak">Gra: spływ kajakiem</option><option value="ship">Gra: okręt z dwoma silnikami</option><option value="tug">Gra: przeciąganie liny</option><option value="climb">Gra: wspinaczka</option><option value="scale">Gra: szalka</option></select></label>
             <label><span id="handLabel">Ręka</span> <select name="hand"><option value="left">Lewa</option><option value="right" selected>Prawa</option><option value="both">Obie razem</option></select></label>
             <label>Jednostka celu <select name="unit"><option value="percent">% maksimum ręki</option><option value="kg">kg</option></select></label>
             <label>Cel <input name="target" type="number" min="0.1" max="100" step="0.1" required></label>
@@ -96,16 +98,22 @@
             <label>Powtórzenia w serii <input name="reps" type="number" min="1" max="50" required></label>
             <label>Serie <input name="sets" type="number" min="1" max="10" required></label>
             <label>Przerwa między seriami (s) <input name="setRestS" type="number" min="0" max="900" required></label>
-            <label id="rivalRow" hidden>Rywal <select name="rival"><option value="easy">Łatwy · 80% celu</option><option value="medium" selected>Średni · 90% celu</option><option value="hard">Trudny · 100% celu</option></select></label>
+            <label id="climbHandsRow" hidden>Zmiana ręki <select name="climbHandMode"><option value="set">Po serii</option><option value="rep">Po powtórzeniu</option></select></label>
+            <label id="tugHandsRow" hidden>Serie <select name="handMode"><option value="single">Wybrana ręka</option><option value="alternating">Lewa i prawa na zmianę</option></select></label>
+            <label id="rivalRow" hidden>Rywal <select name="rival"><option value="easy">Łatwy · 80% celu</option><option value="medium" selected>Średni · 90% celu</option><option value="hard">Trudny · 100% celu</option><option value="ghost">Cień · poprzedni trening</option></select></label>
             <label id="riverRow" hidden>Rzeka <select name="river"><option value="straight">Prosta, z wiatrem</option><option value="bends">Z zakrętami (bez wiatru)</option></select></label>
             <label id="windRow" hidden>Wiatr (%) <input name="wind" type="number" min="0" max="200" step="10"></label>
           </div>
           <p id="planPreview" class="hint" aria-live="polite"></p>
-          <p id="tugIntro" class="hint" hidden>Przeciągnij chorągiewkę w prawo, trzymając siłę w strefie celu. Rywal zapowiada szarpnięcia sekundę wcześniej, a po nich łapie oddech. Seria to jedna runda: dojście do linii zwycięstwa daje punkt, a bez tego wygrywa strona, po której lina jest na końcu serii. Remis, gdy znacznik jest na środku. Po rozstrzygnięciu nadal ćwicz według zegara. W odpoczynku puść — lina stoi. Wybierz lewą, prawą albo obie ręce razem.</p>
+          <p id="scaleIntro" class="hint" hidden>Utrzymuj siłę w strefie przez dwie sekundy, aby zważyć kamień. W kolejnej serii druga ręka odtwarza przebieg siły pierwszej.</p>
+          <p id="climbIntro" class="hint" hidden>Utrzymuj siłę w strefie celu, aby pewnie przechwycić kolejny chwyt. Słaby chwyt powoduje odpadnięcie. Poziom chwytu zmienia się co powtórzenie; w przerwach zmień rękę zgodnie z planem.</p>
+          <p id="tugIntro" class="hint" hidden>Przeciągnij chorągiewkę w prawo, trzymając siłę w strefie celu. Rywal zapowiada szarpnięcia sekundę wcześniej, a po nich łapie oddech. Seria to jedna runda: dojście do linii zwycięstwa daje punkt, a bez tego wygrywa strona, po której lina jest na końcu serii. Remis, gdy znacznik jest na środku. Po rozstrzygnięciu nadal ćwicz według zegara. W odpoczynku puść — lina stoi. Wybierz jedną rękę, obie razem albo serie na zmianę.</p>
           <p id="flightIntro" class="hint" hidden>Większa siła podnosi lotnika. Utrzymuj go w zielonym pasie: każda sekunda w strefie to jedna gwiazda. Podczas odpoczynku rozluźnij chwyt.</p>
           <p id="jumpIntro" class="hint" hidden>Dociągnij do celu, żeby skoczyć nad przeszkodą. Przed kolejnym skokiem odpuść poniżej połowy celu. Silniejsze ciągnięcie nie zwiększa skoku. W Demo sterujesz przyciskiem „Skok”.</p>
           <p id="kayakIntro" class="hint" hidden>Spływ górską rzeką: ręce wiosłują na zmianę (seria = jedna ręka, liczba serii parzysta). Lewa ręka skręca kajak w prawo, prawa w lewo, a rzeka zakręca razem z nim. Każde powtórzenie to inny zakręt: średni (100% celu), łagodny (60%) i ostry (140%), więc cel zmienia się z zakrętu na zakręt. Zbieraj gwiazdki na środku nurtu: co 3 z rzędu rośnie mnożnik combo (do ×5). Ominięta gwiazdka, skała albo brzeg zerują combo. Na koniec medal: 50% gwiazdek brąz, 70% srebro, 90% złoto.</p>
           <p id="shipIntro" class="hint" hidden>Okręt płynie ze stałą prędkością, więc bramy zawsze zgadzają się z planem. Lewa ręka napędza lewy silnik i skręca okręt w prawo, prawa napędza prawy silnik i skręca go w lewo. Dopóki trzymasz siłę w strefie tolerancji, działa jak na celu; słabszy lub mocniejszy chwyt zdejmuje okręt z kursu. Punkty to sekundy w strefie. Ręce pracują na zmianę (seria = jedna ręka, liczba serii musi być parzysta), a przerwa między seriami to czas na zmianę ręki. Woda jest wzburzona tam, gdzie masz pracować (czerwona brama), a spokojna, gdy odpoczywasz (zielona brama). Rzeka prosta: wiatr wieje przeciw skrętowi pracującej ręki, więc przy 100% okręt zostaje na środku tylko w strefie celu. Rzeka z zakrętami: przez cały czas pracy zakręca w tę stronę, w którą skręca okręt (lewa ręka = zakręt w prawo, prawa ręka = zakręt w lewo), a w odpoczynku płynie prosto; wiatr jest wtedy wyłączony.</p>
+          <label class="check"><input type="checkbox" id="coachSound"> Dźwięk zdarzeń</label>
+          <label class="check"><input type="checkbox" id="coachVibration"> Wibracja zdarzeń</label>
           <button id="planSave" type="button" class="btn">Zapisz plan lokalnie</button>
         </fieldset>
         <button id="trainingStart" class="btn btn-primary" type="submit">Rozpocznij · 5 s odliczania</button>
@@ -122,6 +130,8 @@
         </div>
         <canvas id="runner" height="210" role="img" aria-label="Gra: skoki przez przeszkody" hidden></canvas>
         <div id="ship" hidden><canvas id="shipCanvas" height="210" role="img" aria-label="Gra: okręt z dwoma silnikami"></canvas></div>
+        <canvas id="scaleCanvas" width="420" height="210" role="img" aria-label="Gra: szalka" hidden></canvas>
+        <canvas id="climbCanvas" width="420" height="210" role="img" aria-label="Wspinaczka" hidden></canvas>
         <div id="tug" hidden><canvas id="tugCanvas" width="420" height="210" role="img" aria-label="Gra: przeciąganie liny"></canvas></div>
         <button id="demoJump" class="btn btn-primary" type="button" hidden>Skok (DEMO)</button>
         <div id="demoHand" class="demo-hand" lang="pl" hidden>

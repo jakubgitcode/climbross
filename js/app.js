@@ -1,3 +1,4 @@
+import { gameRecord } from './game-records.js';
 import * as ble from './ble.js';
 import * as store from './store.js';
 import { drawChart } from './chart.js';
@@ -308,10 +309,10 @@ async function renderHistory() {
 
   const items = all.filter((m) => state.histFilter === 'all' || m.hand === state.histFilter);
   $('histEmpty').hidden = items.length > 0;
-  $('histList').replaceChildren(...items.map(historyItem));
+  $('histList').replaceChildren(...items.map(m => historyItem(m, all)));
 }
 
-function historyItem(m) {
+function historyItem(m, all) {
   const d = new Date(m.date);
   const bw = m.bodyWeightKg > 0 ? ` · ${Math.round((m.peakKg / m.bodyWeightKg) * 100)}% BW` : '';
   const sub = `${m.demo ? 'DEMO · ' : ''}${m.training ? m.training.plan.name + ' · ' : ''}${d.toLocaleDateString()} ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}${m.hold ? ' · ' + m.hold : ''}`;
@@ -335,6 +336,13 @@ function historyItem(m) {
       `${m.training ? 'Avg during work' : 'Avg under load'} ${fmt(m.avgKg)} kg · time under load ${m.tulS.toFixed(1)} s` + (m.maxBeforeKg > 0 ? ` · ${Math.round((m.peakKg / m.maxBeforeKg) * 100)}% of max then` : ''));
     if (m.training) {
       const t = m.training;
+      const record = gameRecord(all, t.plan);
+      if (record !== null && t.plan.mode !== 'training') {
+        const difference = t.points - record;
+        stats.append(` · rekord dla tego planu ${record} pkt · różnica ${difference > 0 ? '+' : ''}${difference} pkt${m.demo ? ' (DEMO poza rekordem)' : ''}`);
+      }
+      if (t.game?.type === 'climb') stats.append(` · wysokość ${t.game.height} · chwyty ${t.game.clean} · loty ${t.game.falls}`);
+      if (t.game?.type === 'scale') stats.append(` · zważone ${t.game.weighed} · zgodność ${t.game.symmetry == null ? 'brak danych' : `${t.game.symmetry.toFixed(0)}%`}`);
       if (t.game?.type === 'jump') stats.append(` · przeskoczone ${t.game.cleared} · trafione ${t.game.missed}`);
       if (t.game?.type === 'kayak') stats.append(` · ${t.game.score} pkt · gwiazdki ${t.game.stars}/${t.game.totalStars}${t.game.medal ? ` · medal ${t.game.medal}` : ''}`);
       if (t.game?.type === 'tug') stats.append(` · ${t.completed ? '' : 'dotychczas: '}${t.game.result} · rundy ${t.game.roundsWon}:${t.game.roundsLost} · remisy ${t.game.roundsDrawn}`);

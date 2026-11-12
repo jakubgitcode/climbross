@@ -30,7 +30,7 @@ test('rival validates, defaults to medium and is removed from other modes', () =
   assert.ok(PRESETS.tug);
   assert.equal(validatePlan(plan({ rival: undefined })).rival, 'medium');
   for (const rival of ['easy', 'medium', 'hard']) assert.equal(validatePlan(plan({ rival })).rival, rival);
-  for (const rival of ['', 'ghost', 1, null]) assert.throws(() => validatePlan(plan({ rival })), /Rywal/);
+  for (const rival of ['', 'unknown', 1, null]) assert.throws(() => validatePlan(plan({ rival })), /Rywal/);
   assert.equal('rival' in validatePlan({ ...PRESETS.flight, rival: 'easy' }), false);
 });
 

@@ -1,3 +1,5 @@
+import { ScaleGame } from './scale.js';
+import { ClimbGame } from './climb.js';
 import { TugGame } from './tug.js';
 import { JumpGame } from './jump.js';
 import { ShipGame, BEND_HALF_WIDTH, KAYAK_HALF_WIDTH, KAYAK_THETA, KAYAK_RESTORE } from './ship.js';
@@ -6,6 +8,8 @@ export const KAYAK_POWERS = [1, 0.6, 1.4];
 export const ALTERNATING = ['ship', 'kayak'];
 // Pure training clock. Force is kg; percentages use the selected hand's saved max.
 export const PRESETS = {
+  scale: { name: 'Szalka', mode: 'scale', hand: 'left', unit: 'percent', target: 30, tolerance: 15, workS: 6, restS: 3, reps: 3, sets: 4, setRestS: 6 },
+  climb: { name: 'Wspinaczka', mode: 'climb', hand: 'left', handMode: 'set', unit: 'percent', target: 30, tolerance: 15, workS: 6, restS: 3, reps: 3, sets: 4, setRestS: 6 },
   tug: { name: 'Przeciąganie liny', mode: 'tug', unit: 'percent', target: 40, tolerance: 15, workS: 10, restS: 10, reps: 1, sets: 5, setRestS: 20, rival: 'medium' },
   endurance: { name: 'Endurance 20%', mode: 'training', unit: 'percent', target: 20, tolerance: 10, workS: 30, restS: 30, reps: 6, sets: 1, setRestS: 120 },
   repeaters: { name: 'Repeatery 20 kg', mode: 'training', unit: 'kg', target: 20, tolerance: 10, workS: 7, restS: 3, reps: 6, sets: 3, setRestS: 120 },
@@ -19,10 +23,10 @@ export const PRESETS = {
 export const MAX_KEYS = { left: 'maxLeftKg', right: 'maxRightKg', both: 'maxBothKg' };
 export function validatePlan(input) {
   const p = { ...input, name: String(input.name || 'Mój plan').trim().slice(0, 60) };
-  if (!['training', 'game', 'jump', 'ship', 'kayak', 'tug'].includes(p.mode) || !['kg', 'percent'].includes(p.unit)) throw new Error('Nieprawidłowy tryb lub jednostka.');
+  if (!['training', 'game', 'jump', 'ship', 'kayak', 'tug', 'climb', 'scale'].includes(p.mode) || !['kg', 'percent'].includes(p.unit)) throw new Error('Nieprawidłowy tryb lub jednostka.');
   if (p.hand !== undefined && !Object.hasOwn(MAX_KEYS, p.hand)) throw new Error('Wybierz rękę.');
-  if (ALTERNATING.includes(p.mode)) {
-    const game = p.mode === 'kayak' ? 'Kajak' : 'Okręt';
+  if (ALTERNATING.includes(p.mode) || p.mode === 'scale') {
+    const game = p.mode === 'kayak' ? 'Kajak' : p.mode === 'scale' ? 'Szalka' : 'Okręt';
     if (p.hand !== undefined && p.hand === 'both') throw new Error(`${game}: wybierz rękę startową, lewą albo prawą.`);
     if (!Number.isInteger(Number(input.sets)) || Number(input.sets) % 2) throw new Error(`${game}: liczba serii musi być parzysta, żeby obie ręce pracowały tyle samo.`);
   }
@@ -40,8 +44,19 @@ export function validatePlan(input) {
   } else { delete p.wind; delete p.river; }
   if (p.mode === 'tug') {
     p.rival = input.rival === undefined ? 'medium' : input.rival;
-    if (!['easy', 'medium', 'hard'].includes(p.rival)) throw new Error('Rywal: wybierz poziom.');
-  } else delete p.rival;
+    p.handMode = input.handMode || 'single';
+    if (!['single', 'alternating'].includes(p.handMode)) throw new Error('Nieprawidłowy wybór rąk.');
+    if (p.handMode === 'alternating' && (p.hand === 'both' || Number(input.sets) % 2)) throw new Error('Wybierz rękę startową i parzystą liczbę serii.');
+    if (!['easy', 'medium', 'hard', 'ghost'].includes(p.rival)) throw new Error('Rywal: wybierz poziom.');
+  } else { delete p.rival; if (p.mode !== 'climb') delete p.handMode; }
+  if (p.mode === 'climb') {
+    p.handMode = input.handMode || 'set';
+    if (!['set', 'rep'].includes(p.handMode)) throw new Error('Wybierz sposób zmiany rąk.');
+    if (p.hand === 'both' || (p.handMode === 'set' && Number(p.sets) % 2)) throw new Error('Wybierz rękę startową i parzystą liczbę serii.');
+    if (p.handMode === 'rep' && Number(p.reps) * Number(p.sets) % 2) throw new Error('Liczba powtórzeń musi być parzysta.');
+    if (p.handMode === 'rep' && Number(p.reps) > 1 && Number(p.restS) === 0) throw new Error('Ustaw przerwę na zmianę ręki.');
+    if (Number(p.sets) > 1 && Number(p.setRestS) === 0 && (p.handMode === 'set' || Number(p.reps) % 2)) throw new Error('Ustaw przerwę między seriami na zmianę ręki.');
+  }
   if (durationMs(p) > 2 * 60 * 60 * 1000) throw new Error('Plan może trwać najwyżej 2 godziny.');
   return p;
 }
@@ -54,15 +69,26 @@ export function resolveTarget(plan, hand, profile) {
   if (plan.unit === 'percent' && !(Number.isFinite(max) && max > 0)) throw new Error('Najpierw zapisz maksimum wybranej ręki w Profile lub wybierz kg.');
   return plan.unit === 'percent' ? max * plan.target / 100 : plan.target;
 }
+// Only completed sessions with the same schedule and starting hand can be replayed.
+export function findGhost(items, plan, hand) {
+  const keys = ['mode', 'unit', 'target', 'tolerance', 'workS', 'restS', 'reps', 'sets', 'setRestS', 'handMode'];
+  return items.find(m => {
+    const p = m.training?.plan;
+    if (!p || !m.training.completed || !Array.isArray(m.samples) || !m.samples.length) return false;
+    if ((m.training.firstHand ?? m.hand) !== hand) return false;
+    return keys.every(k => (p[k] ?? (k === 'handMode' ? 'single' : undefined)) === (plan[k] ?? (k === 'handMode' ? 'single' : undefined)));
+  }) ?? null;
+}
 export class TrainingSession {
-  constructor(plan, hand, profile, now) {
+  constructor(plan, hand, profile, now, ghost = null) {
     this.plan = validatePlan(plan);
-    const p = this.plan, kayak = p.mode === 'kayak', ship = ALTERNATING.includes(p.mode);
+    const p = this.plan, kayak = p.mode === 'kayak', ship = ALTERNATING.includes(p.mode), alternating = ship || p.mode === 'scale' || p.mode === 'climb' || (p.mode === 'tug' && p.handMode === 'alternating');
+    if (alternating && hand === 'both') throw new Error('Wybierz rękę startową.');
     if (ship && hand !== 'left' && hand !== 'right') throw new Error(`${kayak ? 'Kajak' : 'Okręt'}: wybierz rękę startową, lewą albo prawą.`);
     this.firstHand = hand;
     // A ship session uses both hands, so it is stored like "both hands separately".
-    this.hand = ship ? 'both' : hand;
-    this.targets = ship
+    this.hand = alternating ? 'both' : hand;
+    this.targets = alternating
       ? { left: resolveTarget(p, 'left', profile), right: resolveTarget(p, 'right', profile) }
       : { [hand]: resolveTarget(p, hand, profile) };
     this.targetKg = this.targets[hand];
@@ -74,14 +100,14 @@ export class TrainingSession {
     this.phaseIndex = 0;
     // Ship sets alternate hands, starting with the chosen one.
     const other = hand === 'left' ? 'right' : 'left';
-    const handOf = (set) => (ship && set % 2 === 0 ? other : hand);
+    const handOf = (set, rep = 1) => (alternating && ((p.mode === 'climb' && p.handMode === 'rep') ? ((set - 1) * p.reps + rep - 1) % 2 : (set - 1) % 2) ? other : hand);
     this.phases = [{ kind: 'ready', ms: 5000, set: 1, rep: 1, hand }];
     for (let set = 1; set <= p.sets; set++) {
       for (let rep = 1; rep <= p.reps; rep++) {
         // Both hands of a pair of sets get the same sequence of bends.
-        const power = kayak ? KAYAK_POWERS[(rep - 1 + Math.floor((set - 1) / 2)) % KAYAK_POWERS.length] : 1;
-        this.phases.push({ kind: 'work', ms: p.workS * 1000, set, rep, hand: handOf(set), power });
-        if (rep < p.reps && p.restS > 0) this.phases.push({ kind: 'rest', ms: p.restS * 1000, set, rep, hand: handOf(set) });
+        const power = kayak ? KAYAK_POWERS[(rep - 1 + Math.floor((set - 1) / 2)) % KAYAK_POWERS.length] : ['climb', 'scale'].includes(p.mode) ? [1, .8, 1.2][(rep - 1) % 3] : 1;
+        this.phases.push({ kind: 'work', ms: p.workS * 1000, set, rep, hand: handOf(set, rep), power });
+        if (rep < p.reps && p.restS > 0) this.phases.push({ kind: 'rest', ms: p.restS * 1000, set, rep, hand: p.mode === 'climb' && p.handMode === 'rep' ? handOf(set, rep + 1) : handOf(set, rep) });
       }
       // The change-over announces the hand that works next.
       if (set < p.sets && p.setRestS > 0) this.phases.push({ kind: 'setRest', ms: p.setRestS * 1000, set, rep: p.reps, hand: handOf(set + 1) });
@@ -93,7 +119,17 @@ export class TrainingSession {
         wind: p.river === 'bends' ? 0 : p.wind / 100, workS: p.workS, restS: p.restS, tolerance: p.tolerance / 100,
         bends: p.river === 'bends', ...(p.river === 'bends' ? { halfWidth: BEND_HALF_WIDTH } : {}), schedule,
       }) : null;
-    this.tugGame = p.mode === 'tug' ? new TugGame({ rival: p.rival, tolerance: p.tolerance / 100, sets: p.sets }) : null;
+    if (p.mode === 'tug' && p.rival === 'ghost' && !ghost) throw new Error('Brak zgodnego zapisanego treningu dla cienia.');
+    let phaseOffset = 0;
+    for (const phase of this.phases) { phase.offset = phaseOffset; phaseOffset += phase.ms; }
+    const ghostSamples = ghost?.samples.map(([t, kg]) => {
+      const phase = this.phases.find(x => x.kind === 'work' && t >= x.offset && t < x.offset + x.ms);
+      const target = ghost.training.targets?.[phase?.hand] ?? ghost.training.targetKg;
+      return [t, phase && target > 0 ? kg / target : 0];
+    });
+    this.scaleGame = p.mode === 'scale' ? new ScaleGame({ tolerance: p.tolerance / 100 }) : null;
+    this.climbGame = p.mode === 'climb' ? new ClimbGame({ tolerance: p.tolerance / 100 }) : null;
+    this.tugGame = p.mode === 'tug' ? new TugGame({ rival: p.rival, tolerance: p.tolerance / 100, sets: p.sets, ghost: ghostSamples }) : null;
     this.applyPhase();
     let offset = now;
     for (const phase of this.phases) { phase.start = offset; offset += phase.ms; phase.end = offset; }
@@ -106,6 +142,8 @@ export class TrainingSession {
     this.currentHand = this.phase.hand;
     this.shipGame?.setPhase(this.phase.kind, this.phase.hand);
     this.tugGame?.setPhase(this.phase);
+    this.climbGame?.setPhase(this.phase);
+    this.scaleGame?.setPhase(this.phase);
     // Outside work the display already shows the target of the next pull.
     const next = this.phases.slice(this.phaseIndex).find((x) => x.kind === 'work');
     this.power = next?.power ?? 1;
@@ -141,6 +179,8 @@ export class TrainingSession {
           this.shipGame.advance(measured, this.kg, phase.hand, this.targetKg / this.power, this.power);
           this.shipGame.coast(end - cursor - measured);
         }
+        if (this.scaleGame) { this.scaleGame.advance(measured, this.kg, this.targetKg); this.scaleGame.coast(end - cursor - measured); }
+        if (this.climbGame) { this.climbGame.advance(measured, this.kg, this.targetKg); this.climbGame.coast(end - cursor - measured); }
         if (this.tugGame) { this.tugGame.advance(measured, this.kg, this.targetKg); this.tugGame.coast(end - cursor - measured); }
         this.measuredMs += measured;
         this.forceIntegral += measured * this.kg;
@@ -151,6 +191,7 @@ export class TrainingSession {
       if (end >= phase.end) {
         if (phase.kind === 'work') {
           this.completedReps++;
+          this.climbGame?.endWork();
           if (phase.rep === this.plan.reps) this.tugGame?.endRound();
         }
         this.jumpGame?.rest();
@@ -167,11 +208,13 @@ export class TrainingSession {
   }
   summary() {
     return {
-      plan: this.plan, targetKg: this.shipGame ? this.targets[this.firstHand] : this.targetKg, minKg: this.minKg, maxKg: this.maxKg,
-      ...(this.shipGame ? { targets: this.targets } : {}),
+      plan: this.plan, targetKg: this.targets[this.firstHand] ?? this.targetKg, minKg: this.minKg, maxKg: this.maxKg,
+      ...(this.shipGame || (this.plan.handMode === 'alternating' || this.climbGame || this.scaleGame) ? { targets: this.targets, firstHand: this.firstHand } : {}),
       workS: this.workMs / 1000, zoneS: this.zoneMs / 1000,
       accuracy: this.workMs ? this.zoneMs / this.workMs * 100 : 0,
-      points: this.tugGame ? this.tugGame.roundsWon : this.shipGame?.kayak ? this.shipGame.score : this.jumpGame ? this.jumpGame.cleared : Math.floor(this.zoneMs / 1000), completedReps: this.completedReps,
+      points: this.scaleGame ? this.scaleGame.weighed : this.climbGame ? this.climbGame.clean : this.tugGame ? this.tugGame.roundsWon : this.shipGame?.kayak ? this.shipGame.score : this.jumpGame ? this.jumpGame.cleared : Math.floor(this.zoneMs / 1000), completedReps: this.completedReps,
+      ...(this.scaleGame ? { game: this.scaleGame.summary() } : {}),
+      ...(this.climbGame ? { game: this.climbGame.summary() } : {}),
       ...(this.tugGame ? { game: this.tugGame.summary() } : {}),
       ...(this.jumpGame ? { game: this.jumpGame.summary() } : {}),
       ...(this.shipGame ? { game: this.shipGame.summary() } : {}),

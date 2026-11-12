@@ -304,8 +304,8 @@ export function drawShip(canvas, game, working, hand) {
       const y = middleY(x) + item.off * PX;
       if (item.type === 'star') {
         const pulse = 1 + 0.15 * Math.sin(t * 6 + item.d * 3);
-        c.globalAlpha = item.state === 'missed' ? 0.25 : 1;
-        c.fillStyle = '#ffd43b'; c.beginPath();
+        c.globalAlpha = 1;
+        c.fillStyle = item.state === 'missed' ? '#adb5bd' : '#ffd43b'; c.beginPath();
         for (let k = 0; k < 10; k++) { const r = (k % 2 ? 3 : 7) * pulse, a = -Math.PI / 2 + k * Math.PI / 5; c.lineTo(x + r * Math.cos(a), y + r * Math.sin(a)); }
         c.closePath(); c.fill(); c.globalAlpha = 1;
       } else {

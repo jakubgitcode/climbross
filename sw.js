@@ -1,7 +1,7 @@
 // Offline support: serve the app shell from cache, refresh it in the background.
-const CACHE = 'climbross-v13-tug';
+const CACHE = 'climbross-v15-games';
 const SHELL = [
-  './', 'index.html', 'css/style.css', 'js/app.js', 'js/ble.js', 'js/store.js', 'js/chart.js', 'js/training.js', 'js/coach.js', 'js/jump.js', 'js/ship.js', 'js/tug.js', 'js/cloud.js', 'js/profiles.js',
+  './', 'index.html', 'css/style.css', 'js/app.js', 'js/game-records.js', 'js/climb.js', 'js/scale.js', 'js/ble.js', 'js/store.js', 'js/chart.js', 'js/training.js', 'js/coach.js', 'js/jump.js', 'js/ship.js', 'js/tug.js', 'js/cloud.js', 'js/profiles.js',
   'manifest.webmanifest', 'icon.svg',
 ];
 
