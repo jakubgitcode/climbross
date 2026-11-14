@@ -8,3 +8,10 @@ test('scale alternates hands and compares paired repetitions', () => {
  assert.equal(s.summary().game.weighed,2);
  assert.ok(s.summary().game.symmetry > 95);
 });
+test('a complete session without pulling has no symmetry result', () => {
+ const p={...PRESETS.scale,unit:'kg',target:10,reps:1,sets:2,workS:3,setRestS:1};
+ const s=new TrainingSession(p,'left',{},0);
+ for(let t=0;!s.done;t+=50) s.reading(0,t);
+ assert.equal(s.summary().game.weighed,0);
+ assert.equal(s.summary().game.symmetry,null);
+});

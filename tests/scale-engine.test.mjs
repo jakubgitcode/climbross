@@ -17,3 +17,25 @@ test('missing sensor data resets the hold without inventing a reference sample',
  g.setPhase({kind:'work',set:2,rep:1,hand:'right',ms:3000}); g.advance(3000,10,10);
  assert.equal(g.summary().symmetry,null);
 });
+test('two unloaded hands do not claim perfect force symmetry', () => {
+ const g = new ScaleGame({});
+ g.setPhase({kind:'work',set:1,rep:1,hand:'left',ms:2000}); g.advance(2000,0,10);
+ g.setPhase({kind:'work',set:2,rep:1,hand:'right',ms:2000}); g.advance(2000,0,10);
+ assert.equal(g.summary().symmetry,null);
+});
+test('a pull compared with no pull still contributes to symmetry', () => {
+ const g = new ScaleGame({});
+ g.setPhase({kind:'work',set:1,rep:1,hand:'left',ms:2000}); g.advance(2000,10,10);
+ g.setPhase({kind:'work',set:2,rep:1,hand:'right',ms:2000}); g.advance(2000,0,10);
+ assert.equal(g.summary().symmetry,0);
+});
+test('second hand is not described as the first when reference data is missing', async () => {
+ const { drawScale } = await import('../js/scale.js');
+ const messages=[];
+ const context = new Proxy({}, {get: (o,k) => k === 'fillText' ? (text) => messages.push(text) : () => {}});
+ const g = new ScaleGame({});
+ g.setPhase({kind:'work',set:2,rep:1,hand:'right',ms:2000});
+ drawScale({getContext:()=>context},g);
+ assert.ok(messages.some(x=>/brak.*wzorc/i.test(x)), messages.join(' | '));
+ assert.ok(!messages.some(x=>/Pierwsza ręka: zapamiętuję/.test(x)));
+});

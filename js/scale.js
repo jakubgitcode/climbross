@@ -17,7 +17,10 @@ export class ScaleGame {
       for (let i = lo; i < samples.length && samples[i][0] < end; i++) {
         const [start, stop, ref] = samples[i];
         const overlap = Math.max(0, Math.min(end, stop) - Math.max(this.elapsed, start));
-        if (overlap) { this.error += Math.min(1, Math.abs(ratio - ref)) * overlap; this.comparedMs += overlap; this.reference = ref; }
+        if (overlap) {
+          this.reference = ref;
+          if (ratio > 0 || ref > 0) { this.error += Math.min(1, Math.abs(ratio - ref)) * overlap; this.comparedMs += overlap; }
+        }
       }
     }
     this.ratio = ratio; this.elapsed += ms;
@@ -35,7 +38,7 @@ export function drawScale(canvas, game) {
   const angle = Math.max(-.3, Math.min(.3, (game.ratio - (game.reference ?? 1)) * .35));
   c.save(); c.translate(210, 110); c.rotate(-angle); c.strokeStyle = '#e8d3a8'; c.lineWidth = 5; c.beginPath(); c.moveTo(-130, 0); c.lineTo(130, 0); c.stroke(); c.restore();
   c.fillStyle = '#fff'; c.font = 'bold 16px system-ui'; c.fillText(`Zważone: ${game.weighed}`, 16, 24);
-  c.fillText(game.reference == null ? 'Pierwsza ręka: zapamiętuję siłę' : `Wzór pierwszej ręki: ${Math.round(game.reference * 100)}% celu`, 16, 49);
+  c.fillText(game.reference == null ? (game.phase?.kind !== 'work' ? 'Przygotuj się do ważenia' : game.phase.set % 2 ? 'Pierwsza ręka: zapamiętuję siłę' : 'Brak danych wzorcowych dla tej chwili') : `Wzór pierwszej ręki: ${Math.round(game.reference * 100)}% celu`, 16, 49);
   c.fillStyle = '#fff'; c.font = '13px system-ui'; c.fillText(`Twoja siła: ${Math.round(game.ratio * 100)}% celu`, 16, 70);
   c.fillStyle = '#0d2029'; c.fillRect(110, 175, 200, 12); c.fillStyle = '#80d6ae'; c.fillRect(110, 175, 200 * Math.min(1, game.hold / 2000), 12);
 }
