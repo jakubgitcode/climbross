@@ -33,12 +33,31 @@ export class ScaleGame {
 
 export function drawScale(canvas, game) {
   const c = canvas.getContext('2d'); if (!c) return;
-  canvas.width = 420; canvas.height = 210;
-  c.fillStyle = '#20323b'; c.fillRect(0, 0, 420, 210);
-  const angle = Math.max(-.3, Math.min(.3, (game.ratio - (game.reference ?? 1)) * .35));
-  c.save(); c.translate(210, 110); c.rotate(-angle); c.strokeStyle = '#e8d3a8'; c.lineWidth = 5; c.beginPath(); c.moveTo(-130, 0); c.lineTo(130, 0); c.stroke(); c.restore();
-  c.fillStyle = '#fff'; c.font = 'bold 16px system-ui'; c.fillText(`Zważone: ${game.weighed}`, 16, 24);
-  c.fillText(game.reference == null ? (game.phase?.kind !== 'work' ? 'Przygotuj się do ważenia' : game.phase.set % 2 ? 'Pierwsza ręka: zapamiętuję siłę' : 'Brak danych wzorcowych dla tej chwili') : `Wzór pierwszej ręki: ${Math.round(game.reference * 100)}% celu`, 16, 49);
-  c.fillStyle = '#fff'; c.font = '13px system-ui'; c.fillText(`Twoja siła: ${Math.round(game.ratio * 100)}% celu`, 16, 70);
-  c.fillStyle = '#0d2029'; c.fillRect(110, 175, 200, 12); c.fillStyle = '#80d6ae'; c.fillRect(110, 175, 200 * Math.min(1, game.hold / 2000), 12);
+  if (canvas.width !== 420) canvas.width = 420;
+  if (canvas.height !== 210) canvas.height = 210;
+  const working = game.phase?.kind === 'work';
+  const balanced = working && Math.abs(game.ratio - 1) <= game.tolerance + 1e-12;
+  const success = working && game.scored && balanced;
+  const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  const pulse = reduced ? 0 : Math.sin((globalThis.performance?.now() ?? 0) / 250) * 3;
+  c.fillStyle = '#132637'; c.fillRect(0, 0, 420, 210);
+  c.fillStyle = success ? '#174c45' : '#1c3645'; c.fillRect(8, 8, 404, 194);
+  c.fillStyle = '#f6f7eb'; c.font = 'bold 15px system-ui'; c.textAlign = 'left';
+  c.fillText(`ZWAŻONE  ★ ${game.weighed}`, 18, 28);
+  c.textAlign = 'right'; c.fillStyle = success ? '#a9ffcd' : '#d8e8eb';
+  c.fillText(success ? 'RÓWNOWAGA! +1 ★' : balanced ? 'TRZYMAJ RÓWNO…' : working ? 'ZNAJDŹ RÓWNOWAGĘ' : 'ODPOCZYNEK', 402, 28);
+  const angle = Math.max(-.25, Math.min(.25, (game.ratio - (game.reference ?? 1)) * .3));
+  c.strokeStyle = '#aabcc0'; c.lineWidth = 3; c.beginPath(); c.moveTo(210, 103); c.lineTo(210, 154); c.moveTo(180, 154); c.lineTo(240, 154); c.stroke();
+  c.save(); c.translate(210, 103); c.rotate(-angle);
+  c.strokeStyle = success ? '#9bffd0' : '#f6d58f'; c.lineWidth = 6; c.beginPath(); c.moveTo(-110, 0); c.lineTo(110, 0); c.stroke();
+  c.lineWidth = 2; c.beginPath(); c.moveTo(-100, 0); c.lineTo(-100, 26); c.moveTo(100, 0); c.lineTo(100, 26); c.stroke();
+  c.fillStyle = '#d8b983'; c.fillRect(-127, 26, 54, 7); c.fillRect(73, 26, 54, 7);
+  c.fillStyle = '#9aaab0'; c.beginPath(); c.arc(-100, 17, 13, 0, Math.PI * 2); c.fill();
+  const effort = Math.max(0, Math.min(1.5, game.ratio)); c.fillStyle = balanced ? '#78e6bd' : '#ffa971';
+  c.fillRect(78, 24 - 24 * effort, 44, 24 * effort); c.restore();
+  if (success) { c.fillStyle = '#fff3a4'; c.font = 'bold 19px system-ui'; c.textAlign = 'center'; c.fillText('✦', 210, 78 - pulse); c.fillText('✦', 55, 96 + pulse); c.fillText('✦', 365, 96 - pulse); }
+  c.textAlign = 'left'; c.fillStyle = '#e6f1ed'; c.font = '13px system-ui';
+  const ref = game.reference == null ? (game.phase?.kind !== 'work' ? 'Przygotuj się do ważenia' : game.phase.set % 2 ? 'Pierwsza ręka: zapamiętuję siłę' : 'Brak danych wzorcowych dla tej chwili') : `Wzór pierwszej ręki: ${Math.round(game.reference * 100)}% celu`;
+  c.fillText(ref, 18, 177); c.textAlign = 'right'; c.fillText(`Siła ${Math.round(game.ratio * 100)}%`, 402, 177);
+  c.fillStyle = '#10202a'; c.fillRect(18, 187, 384, 9); c.fillStyle = success ? '#ffda76' : '#7be5bd'; c.fillRect(18, 187, 384 * Math.min(1, game.hold / 2000), 9);
 }

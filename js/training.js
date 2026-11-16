@@ -186,6 +186,11 @@ export class TrainingSession {
         this.forceIntegral += measured * this.kg;
         if (this.kg >= 1) this.loadMs += measured;
         if (this.kg >= this.minKg && this.kg <= this.maxKg) this.zoneMs += measured;
+      } else if (this.shipGame?.kayak && phase.kind === 'rest') {
+        // A fresh pull steers during rest but is excluded from work metrics.
+        const measured = this.lastReading === null ? 0 : Math.max(0, Math.min(end, this.lastReading + 250) - cursor);
+        this.shipGame.advance(measured, this.kg, phase.hand, this.targetKg / this.power, this.power, false);
+        this.shipGame.coast(end - cursor - measured);
       } else this.shipGame?.coast(end - cursor);
       cursor = end;
       if (end >= phase.end) {

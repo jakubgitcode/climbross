@@ -191,7 +191,8 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
     $('forceZone').style.width = `${session.plan.tolerance}%`;
     $('coachScore').textContent = `W strefie ${(session.zoneMs / 1000).toFixed(1)} s · ★ ${Math.floor(session.zoneMs / 1000)}`;
     if (session.shipGame) {
-      drawShip($('shipCanvas'), session.shipGame, work, p.hand);
+      const kayakPull = session.shipGame.kayak && p.kind === 'rest' && fresh && session.kg >= 1;
+      drawShip($('shipCanvas'), session.shipGame, work || kayakPull, p.hand);
       $('coachScore').textContent = `★ ${Math.floor(session.zoneMs / 1000)} s w strefie · ⚠ uderzenia ${session.shipGame.hits}`;
       const engine = p.hand === 'left' ? 'lewym' : 'prawym';
       const g = session.shipGame;
@@ -201,7 +202,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
         $('coachScore').textContent = `★ ${g.score} pkt · gwiazdki ${g.stars}/${g.totalStars} · combo ×${g.multiplier} · ⚠ ${g.hits}`;
         $('coachHint').textContent = work
           ? (!fresh ? 'Czekam na dane…' : `Zakręt ${bend} w ${turn} · ${Math.round(session.kg / session.targetKg * 100)}% celu`)
-          : `${p.kind === 'rest' ? 'Odpocznij' : p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : `Zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką`} · następny zakręt ${bend}: ${kg(session.targetKg)}`;
+          : `${p.kind === 'rest' ? (kayakPull ? 'Ciągniesz w przerwie — kajak skręca' : 'Odpocznij — pociągnięcie skręca kajak') : p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : `Zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką`} · następny zakręt ${bend}: ${kg(session.targetKg)}`;
       } else
       $('coachHint').textContent = !work ? (p.kind === 'setRest' ? `Zmień rękę: teraz ${HAND[p.hand].toLowerCase()}` : p.kind === 'ready' ? `Przygotuj się: zaczynasz ${p.hand === 'left' ? 'lewą' : 'prawą'} ręką` : 'Puść i odpocznij') : !fresh ? 'Czekam na dane…' : `Napędzasz ${engine} silnikiem, okręt skręca w ${engine === 'lewym' ? 'prawo' : 'lewo'} · ${Math.round(session.kg / session.targetKg * 100)}% celu`;
       $('shipCanvas').setAttribute('aria-label', `${$('coachScore').textContent}. ${$('coachHint').textContent}`);

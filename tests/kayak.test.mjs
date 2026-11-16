@@ -71,3 +71,29 @@ test('one missed star resets the multiplier', () => {
   }
   assert.ok(top > 1 && dropped);
 });
+
+test('a fresh pull steers the kayak during a rest without adding work points', () => {
+  const plan = {...PRESETS.kayak, unit:'kg', target:10, reps:2, sets:2, workS:1, restS:3, setRestS:1};
+  function simulate(pull) {
+    const s = new TrainingSession(plan, 'left', profile, 0);
+    for(let now=20; now<=8000; now+=20) s.reading(s.phase.kind==='rest' && pull ? 10 : 0, now);
+    return s;
+  }
+  const pulling=simulate(true), quiet=simulate(false);
+  assert.ok(pulling.shipGame.heading > quiet.shipGame.heading + .01);
+  assert.equal(pulling.workMs, quiet.workMs);
+  assert.equal(pulling.zoneMs, quiet.zoneMs);
+});
+test('rest pulls steer according to the active hand; stale readings do not keep steering', () => {
+ const p={...PRESETS.kayak,unit:'kg',target:10,reps:2,sets:2,workS:1,restS:3,setRestS:1};
+ function rest(hand, fresh) {
+  const s=new TrainingSession(p,hand,profile,0);
+  for(let t=20;t<=7000;t+=20) s.reading(s.phase.kind==='rest' ? 10 : 0,t);
+  if (fresh) for(let t=7020;t<=7400;t+=20) s.reading(10,t);
+  else { for(let t=7020;t<=7400;t+=20) s.tick(t); }
+  return s.shipGame.heading;
+ }
+ assert.ok(rest('left',true)>0);
+ assert.ok(rest('right',true)<0);
+ assert.ok(rest('left',true)>rest('left',false));
+});

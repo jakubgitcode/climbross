@@ -45,3 +45,5 @@ Choose **Przeciąganie liny** and an easy, medium or hard rival. Each set is one
 ## Climbing and balance
 
 Choose **Wspinaczka** to reach holds by keeping force in the target zone. Hands alternate per set or repetition. Choose **Szalka** to balance a target for two seconds and compare the second hand against the first. Records are kept by game and plan; demo and interrupted sessions are excluded. Optional sound and vibration are off by default.
+
+The balance game shows effort and celebrates a weighed stone. In the kayak game, a fresh pull also steers during a normal rest without adding work time; steering is disabled during preparation and hand changes.

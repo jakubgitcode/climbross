@@ -144,7 +144,7 @@ export class ShipGame {
     this.windDir = kind === 'work' || kind === 'rest' ? (hand === 'left' ? -1 : 1) : 0;
   }
   /** Force is applied for `ms` by `hand` against that hand's target. */
-  advance(ms, kg, hand, targetKg, power = 1) {
+  advance(ms, kg, hand, targetKg, power = 1, countWork = true) {
     if (!Number.isFinite(ms) || ms <= 0 || !Number.isFinite(kg) || !(targetKg > 0) || !(hand in this.engine)) return;
     if (!(power > 0)) power = 1;
     // `power` scales this phase's target: a sharper bend asks for a stronger pull and turns harder.
@@ -152,7 +152,7 @@ export class ShipGame {
     // Inside the zone the engine counts as exactly on target; outside it the effect resumes smoothly.
     const effective = Math.abs(ratio - 1) <= tol ? 1 : ratio < 1 ? ratio / (1 - tol) : ratio - tol;
     const e = this.engine[hand];
-    e.thrustMs += Math.min(MAX_THRUST, ratio) * ms; e.ms += ms;
+    if (countWork) { e.thrustMs += Math.min(MAX_THRUST, ratio) * ms; e.ms += ms; }
     this.#run(ms, Math.min(MAX_THRUST, effective) * power, hand === 'left' ? 1 : -1);
   }
   /** Rest, preparation, or a stale sensor: the ship keeps gliding. */

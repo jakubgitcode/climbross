@@ -39,3 +39,18 @@ test('second hand is not described as the first when reference data is missing',
  assert.ok(messages.some(x=>/brak.*wzorc/i.test(x)), messages.join(' | '));
  assert.ok(!messages.some(x=>/Pierwsza ręka: zapamiętuję/.test(x)));
 });
+test('scale shows effort and a success message when the weight is balanced', async () => {
+ const {drawScale} = await import('../js/scale.js');
+ const text=[]; const c=new Proxy({}, { get:(o,k)=>k==='fillText'?(s)=>text.push(s):()=>{} });
+ const g=new ScaleGame({}); g.setPhase({kind:'work',set:1,rep:1,ms:3000}); g.advance(2000,10,10);
+ drawScale({getContext:()=>c},g);
+ assert.ok(text.some(s=>/równowaga/i.test(s)),text.join(' | '));
+ assert.ok(text.some(s=>/100%/.test(s)),text.join(' | '));
+});
+test('success animation does not report balance after force leaves the target band', async () => {
+ const {drawScale} = await import('../js/scale.js');
+ const text=[]; const c=new Proxy({}, {get:(o,k)=>k==='fillText'?(s)=>text.push(s):()=>{}});
+ const g=new ScaleGame({}); g.setPhase({kind:'work',set:1,rep:1,ms:4000}); g.advance(2000,10,10); g.advance(100,0,10);
+ drawScale({getContext:()=>c},g);
+ assert.ok(!text.some(s=>/RÓWNOWAGA!/.test(s)),text.join(' | '));
+});
