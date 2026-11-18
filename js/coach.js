@@ -154,6 +154,7 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
     const s = result.summary();
     $('coachResultTitle').textContent = `${s.reason}${result.demo ? ' · DEMO' : ''}`;
     $('coachResultText').textContent = `${HAND[result.hand]} · cel ${kg(s.targetKg)} · ${s.completedReps}/${s.plan.reps * s.plan.sets} powtórzeń. W strefie ${s.zoneS.toFixed(1)} z ${s.workS.toFixed(1)} s (${s.accuracy.toFixed(0)}%). Szczyt ${kg(result.peakKg)}.${s.plan.mode === 'game' ? ` Zdobyte gwiazdy: ${s.points}.` : ''}`;
+    if (s.game?.type === 'flight') $('coachResultText').textContent += ` Pierścienie: ${s.game.hit} trafionych (idealnie ${s.game.perfect}), ${s.game.missed} pominiętych; najlepsza seria ${s.game.bestStreak}.`;
     if (s.game?.type === 'scale') $('coachResultText').textContent += ` Szalka: zważone ${s.game.weighed}, zgodność rąk ${s.game.symmetry === null ? 'brak porównania' : `${s.game.symmetry.toFixed(0)}%`}.`;
     if (s.game?.type === 'climb') $('coachResultText').textContent += ` Wspinaczka: wysokość ${s.game.height}, czyste chwyty ${s.game.clean}, loty ${s.game.falls}.`;
     if (s.game?.type === 'jump') $('coachResultText').textContent += ` Przeskoczone: ${s.game.cleared}, trafione: ${s.game.missed}, skoki: ${s.game.jumps}.`;
@@ -190,6 +191,12 @@ export function createCoach({ context, busyChanged, toast, historyChanged, demoF
     $('forceZone').style.left = `${session.minKg / (session.targetKg * 2) * 100}%`;
     $('forceZone').style.width = `${session.plan.tolerance}%`;
     $('coachScore').textContent = `W strefie ${(session.zoneMs / 1000).toFixed(1)} s · ★ ${Math.floor(session.zoneMs / 1000)}`;
+    if (session.flightGame) {
+      const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      $('flightRing').style.left = `${reduced ? 55 : 20 + (1 - session.flightGame.progress) * 75}%`;
+      $('flightRing').style.height = `${Math.max(2, session.plan.tolerance)}%`;
+      $('coachScore').textContent += ` · pierścienie ${session.flightGame.hit} (idealnie ${session.flightGame.perfect}) · seria ${session.flightGame.streak}${work && reduced ? ` · następny za ${((1 - session.flightGame.progress) * 2).toFixed(1)} s` : ''}`;
+    }
     if (session.shipGame) {
       const kayakPull = session.shipGame.kayak && p.kind === 'rest' && fresh && session.kg >= 1;
       drawShip($('shipCanvas'), session.shipGame, work || kayakPull, p.hand);

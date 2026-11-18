@@ -1,3 +1,4 @@
+import { FlightGame } from './flight.js';
 import { ScaleGame } from './scale.js';
 import { ClimbGame } from './climb.js';
 import { TugGame } from './tug.js';
@@ -92,6 +93,7 @@ export class TrainingSession {
       ? { left: resolveTarget(p, 'left', profile), right: resolveTarget(p, 'right', profile) }
       : { [hand]: resolveTarget(p, hand, profile) };
     this.targetKg = this.targets[hand];
+    this.flightGame = p.mode === 'game' ? new FlightGame(p.tolerance / 100) : null;
     this.jumpGame = p.mode === 'jump' ? new JumpGame(this.targetKg) : null;
     this.started = now;
     this.lastTick = now;
@@ -140,6 +142,7 @@ export class TrainingSession {
   // The target and zone follow the hand of the current phase (they only differ in ship mode).
   applyPhase() {
     this.currentHand = this.phase.hand;
+    this.flightGame?.setPhase(this.phase.kind);
     this.shipGame?.setPhase(this.phase.kind, this.phase.hand);
     this.tugGame?.setPhase(this.phase);
     this.climbGame?.setPhase(this.phase);
@@ -174,6 +177,7 @@ export class TrainingSession {
         this.workMs += end - cursor;
         // Do not award points for old sensor values between notifications.
         const measured = this.lastReading === null ? 0 : Math.max(0, Math.min(end, this.lastReading + 250) - cursor);
+        if (this.flightGame) { this.flightGame.advance(measured, this.kg, this.targetKg); this.flightGame.advance(end - cursor - measured, 0, this.targetKg, false); }
         this.jumpGame?.advance(measured, this.demo && !this.demoManual ? 0 : this.kg);
         if (this.shipGame) {
           this.shipGame.advance(measured, this.kg, phase.hand, this.targetKg / this.power, this.power);
@@ -218,6 +222,7 @@ export class TrainingSession {
       workS: this.workMs / 1000, zoneS: this.zoneMs / 1000,
       accuracy: this.workMs ? this.zoneMs / this.workMs * 100 : 0,
       points: this.scaleGame ? this.scaleGame.weighed : this.climbGame ? this.climbGame.clean : this.tugGame ? this.tugGame.roundsWon : this.shipGame?.kayak ? this.shipGame.score : this.jumpGame ? this.jumpGame.cleared : Math.floor(this.zoneMs / 1000), completedReps: this.completedReps,
+      ...(this.flightGame ? { game: this.flightGame.summary() } : {}),
       ...(this.scaleGame ? { game: this.scaleGame.summary() } : {}),
       ...(this.climbGame ? { game: this.climbGame.summary() } : {}),
       ...(this.tugGame ? { game: this.tugGame.summary() } : {}),

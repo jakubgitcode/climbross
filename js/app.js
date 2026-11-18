@@ -341,6 +341,7 @@ function historyItem(m, all) {
         const difference = t.points - record;
         stats.append(` · rekord dla tego planu ${record} pkt · różnica ${difference > 0 ? '+' : ''}${difference} pkt${m.demo ? ' (DEMO poza rekordem)' : ''}`);
       }
+      if (t.game?.type === 'flight') stats.append(` · pierścienie ${t.game.hit} · idealnie ${t.game.perfect ?? 0} · pominięte ${t.game.missed} · seria ${t.game.bestStreak}`);
       if (t.game?.type === 'climb') stats.append(` · wysokość ${t.game.height} · chwyty ${t.game.clean} · loty ${t.game.falls}`);
       if (t.game?.type === 'scale') stats.append(` · zważone ${t.game.weighed} · zgodność ${t.game.symmetry == null ? 'brak danych' : `${t.game.symmetry.toFixed(0)}%`}`);
       if (t.game?.type === 'jump') stats.append(` · przeskoczone ${t.game.cleared} · trafione ${t.game.missed}`);
